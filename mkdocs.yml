@@ -1,5 +1,5 @@
 site_name: LLMOps with Kubernetes
-site_url: http://kubernetes-tutorial.schoolofdevops.com/
+site_url: http://llmops-tutorial.schoolofdevops.com/
 site_author: Gourav Shah
 site_description: LLMOps / GenAIOps with Kubernetes, Kubeflow, Kserve, GitOps
 google_analytics: ['', 'llmops-tutorial.schoolofdevops.com']
