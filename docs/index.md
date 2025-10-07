@@ -61,7 +61,7 @@ Each lab builds on the previous one, progressively assembling the full GenAI sta
 ---
 
 > **Author:** [Gourav Shah](https://www.linkedin.com/in/gouravshah)  
-> **Project:** [School of DevOps – LLMOps Bootcamp: Kubernetes for GenAI Workloads](https://github.com/schoolofdevops/llmops-labguide)  
+> **Project:** [School of DevOps – LLMOps Bootcamp: Kubernetes for GenAI Workloads](https://github.com/schoolofdevops/llmops-labuide)  
 > **License:** CC BY-NC-SA © 2025 Gourav Shah · School of DevOps
 
 ---

@@ -18,7 +18,7 @@ docs_dir: docs
 theme: readthedocs
 plugins:
     - search
-repo_url: https://github.com/schoolofdevops/llmops-labguide
+repo_url: https://github.com/schoolofdevops/llmops-labuide
 edit_uri: edit/master/docs
 copyright: Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA
 extra:
