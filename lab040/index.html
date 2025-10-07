@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://kubernetes-tutorial.schoolofdevops.com/lab040/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 4.0 : Testing vLLM on MacOS - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 4.0 : Testing vLLM on MacOS";
+        var mkdocs_page_input_path = "lab040.md";
+        var mkdocs_page_url = "/lab040/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Lab 4.0 : Testing vLLM on MacOS</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab040.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-40-testing-vllm-on-macos">Lab 4.0 : Testing vLLM on MacOS</h1>
+<p>Pull the vLLM Image created with CPU Only Inference with </p>
+<pre><code>docker image pull schoolofdevops/vllm-cpu-nonuma:0.9.1
+</code></pre>
+<p>Export the merged model built earlier as a model directory on your Mac </p>
+<p>e.g. </p>
+<pre><code>export MODEL_DIR=/Users/gshah/work/llmops/code/project/atharva-dental-assistant/artifacts/train/20251001-084805/merged-model
+</code></pre>
+<p>replace the path with actual path to <code>merged-model</code></p>
+<p>Launch the vLLM using CPU only mode with options which should work on MacOS Silicon </p>
+<pre><code>docker run --rm -p 8123:8000 --name vllmtest \
+  --security-opt seccomp=unconfined \
+  -e VLLM_TARGET_DEVICE=cpu \
+  -e OMP_NUM_THREADS=2 -e OPENBLAS_NUM_THREADS=1 -e MKL_NUM_THREADS=1 \
+  -e VLLM_CPU_KVCACHE_SPACE=1 \
+  -v &quot;$MODEL_DIR:/models/model:ro&quot; \
+  schoolofdevops/vllm-cpu-nonuma:0.9.1 \
+  --model /models/model \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --max-model-len 2048 \
+  --served-model-name smollm2-135m-atharva \
+  --dtype float16 \
+  --disable-frontend-multiprocessing
+</code></pre>
+<h2 id="quick-local-validation">Quick local validation</h2>
+<h3 id="1-model-list">1) Model list</h3>
+<pre><code>curl -s http://127.0.0.1:8123/v1/models | jq .
+</code></pre>
+<h3 id="2-simple-chat-completion">2) Simple chat completion</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:8123/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
+        &quot;max_tokens&quot;: 32,
+        &quot;temperature&quot;: 0.2
+      }' | jq .
+</code></pre>
+<pre><code>curl -s -X POST http://127.0.0.1:30200/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
+        &quot;max_tokens&quot;: 32,
+        &quot;temperature&quot;: 0.2
+      }' | jq .
+</code></pre>
+<h3 id="3-legacy-completions-optional">3) Legacy completions (optional)</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:8123/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;prompt&quot;:&quot;Write a haiku about dentists:&quot;,
+        &quot;max_tokens&quot;: 40
+      }' | jq .
+</code></pre>
+<h3 id="4-embeddings-optional-not-available">4) Embeddings (optional / Not Available)</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:8123/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;input&quot;:&quot;dental care tips&quot;
+      }' | jq .
+</code></pre>
+<blockquote>
+<p>tip: on CPU, <code>--dtype float32</code> or <code>bfloat16</code> is usually safer than <code>float16</code>. You can leave it as-is since it works; if you hit oddities, try <code>--dtype float32</code>.</p>
+</blockquote>
+<p>Delete the container with </p>
+<pre><code>docker rm -f vllmtest
+</code></pre>
+<h2 id="load-the-model-to-kind-cluster">Load the Model to KIND Cluster</h2>
+<p>Load it to a specific node <code>llmops-kind-worker2</code></p>
+<pre><code>kind load  docker-image schoolofdevops/vllm-cpu-nonuma:0.9.1 --name llmops-kind --nodes llmops-kind-worker
+</code></pre>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

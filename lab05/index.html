@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://kubernetes-tutorial.schoolofdevops.com/lab05/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 05 - LLM Observability with Prometheus - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 05 - LLM Observability with Prometheus";
+        var mkdocs_page_input_path = "lab05.md";
+        var mkdocs_page_url = "/lab05/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 05 - LLM Observability with Prometheus</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#goal">Goal</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#whats-new-in-this-lab">What’s new in this lab</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#0-setup-prometheus">0) Setup Prometheus</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-instrument-the-services">1) Instrument the services</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#a-chat-api-add-prometheus-metrics-servingchat_apipy">A) Chat API — add Prometheus metrics (serving/chat_api.py)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#b-retriever-add-prometheus-metrics-ragretrieverpy">B) Retriever — add Prometheus metrics (rag/retriever.py)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-servicemonitors">2) ServiceMonitors</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitysm-vllmyaml">k8s/50-observability/sm-vllm.yaml</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitysm-chat-apiyaml">k8s/50-observability/sm-chat-api.yaml</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitysm-retrieveryaml">k8s/50-observability/sm-retriever.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-optional-alerts-prometheusrule">3) (Optional) Alerts (PrometheusRule)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitypr-alertsyaml">k8s/50-observability/pr-alerts.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-grafana-dashboard-configmap">4) Grafana dashboard (ConfigMap)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitycm-grafana-dashboardyaml">k8s/50-observability/cm-grafana-dashboard.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-deploy-all-observability-bits">5) Deploy all observability bits</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#scriptsdeploy_observabilitysh">scripts/deploy_observability.sh</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-run-the-lab">6) Run the lab</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#lab-summary">Lab Summary</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 05 - LLM Observability with Prometheus</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab05.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-5-observe-vllm-rag-chat-api">Lab 5 — Observe vLLM + RAG + Chat API</h1>
+<h2 id="goal">Goal</h2>
+<ul>
+<li>
+<p>Export <strong>system + model metrics</strong>:</p>
+</li>
+<li>
+<p>vLLM: TTFT, latency histograms, tokens/sec, request counts (already exposed when <code>--enable-metrics</code> is on).</p>
+</li>
+<li>
+<p>Chat API: end-to-end latency, prompt/response token counts, request/5xx counts.</p>
+</li>
+<li>
+<p>Retriever: retrieval latency and top-k stats.</p>
+</li>
+<li>
+<p>Scrape with <strong>Prometheus (kube-prometheus-stack)</strong>.</p>
+</li>
+<li>
+<p>Visualize with <strong>Grafana</strong>.</p>
+</li>
+</ul>
+<blockquote>
+<p>From Lab 0 we installed kube-prometheus-stack with
+<code>prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false</code> — so <strong>any</strong> ServiceMonitor is scraped (no special labels needed).</p>
+</blockquote>
+<hr />
+<h2 id="whats-new-in-this-lab">What’s new in this lab</h2>
+<pre><code>atharva-dental-assistant/
+├─ serving/
+│  ├─ chat_api.py                 # UPDATED: Prometheus metrics (/metrics)
+│  └─ prompt_templates.py
+├─ rag/
+│  └─ retriever.py                # UPDATED: Prometheus metrics (/metrics)
+├─ k8s/
+│  └─ 50-observability/
+│     ├─ sm-vllm.yaml            # ServiceMonitor for vLLM
+│     ├─ sm-chat-api.yaml        # ServiceMonitor for Chat API
+│     ├─ sm-retriever.yaml       # ServiceMonitor for Retriever
+│     ├─ pr-alerts.yaml          # (optional) basic alert rules
+│     └─ cm-grafana-dashboard.yaml
+└─ scripts/
+   └─ deploy_observability.sh
+</code></pre>
+<hr />
+<h2 id="0-setup-prometheus">0) Setup Prometheus</h2>
+<p>Setup prometheus stack along with grafana with </p>
+<pre><code>helm upgrade --install kps -n monitoring \
+  prometheus-community/kube-prometheus-stack \
+  --create-namespace \
+  --set grafana.service.type=NodePort \
+  --set grafana.service.nodePort=30400 \
+  --set prometheus.service.type=NodePort \
+  --set prometheus.service.nodePort=30500 \
+  --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+
+</code></pre>
+<p>validate </p>
+<pre><code>kubectl rollout status -n monitoring deploy/kps-grafana --timeout=300s 
+kubectl get pods -n monitoring
+</code></pre>
+<ul>
+<li>Grafana : http://localhost:30400/</li>
+<li>user: <code>admin</code></li>
+<li>pass: <code>prom-operator</code></li>
+<li>Prometheus : http://localhost:30500/</li>
+</ul>
+<h2 id="1-instrument-the-services">1) Instrument the services</h2>
+<h3 id="a-chat-api-add-prometheus-metrics-servingchat_apipy">A) Chat API — add Prometheus metrics (<code>serving/chat_api.py</code>)</h3>
+<p>Replace your file with this version (differences: imports, metrics, <code>/metrics</code> endpoint, timings):</p>
+<pre><code>import os
+import time
+import httpx
+from fastapi import FastAPI, Query, Response
+from pydantic import BaseModel
+from typing import List, Dict, Any
+
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
+
+from prompt_templates import build_messages
+
+RETRIEVER_URL = os.getenv(&quot;RETRIEVER_URL&quot;, &quot;http://atharva-retriever.atharva-ml.svc.cluster.local:8001&quot;)
+VLLM_URL      = os.getenv(&quot;VLLM_URL&quot;,      &quot;http://atharva-vllm.atharva-ml.svc.cluster.local:8000&quot;)
+MODEL_NAME    = os.getenv(&quot;MODEL_NAME&quot;,    &quot;smollm2-135m-atharva&quot;)
+
+MAX_CTX_SNIPPETS = int(os.getenv(&quot;MAX_CTX_SNIPPETS&quot;, &quot;3&quot;))
+MAX_CTX_CHARS    = int(os.getenv(&quot;MAX_CTX_CHARS&quot;, &quot;2400&quot;))
+
+app = FastAPI()
+
+# -----------------------------
+# Prometheus metrics
+# -----------------------------
+REQS = Counter(&quot;chat_requests_total&quot;, &quot;Total Chat API requests&quot;, [&quot;route&quot;])
+ERRS = Counter(&quot;chat_errors_total&quot;, &quot;Total Chat API errors&quot;, [&quot;stage&quot;])
+E2E_LAT = Histogram(
+    &quot;chat_end_to_end_latency_seconds&quot;,
+    &quot;End-to-end /chat latency in seconds&quot;,
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 8, 13),
+)
+RAG_LAT = Histogram(
+    &quot;rag_retrieval_latency_seconds&quot;,
+    &quot;Retriever call latency in seconds&quot;,
+    buckets=(0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5, 3),
+)
+VLLM_LAT = Histogram(
+    &quot;vllm_request_latency_seconds&quot;,
+    &quot;vLLM chat/completions call latency in seconds&quot;,
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 8, 13),
+)
+
+TOK_PROMPT = Gauge(&quot;chat_prompt_tokens&quot;, &quot;Prompt tokens for the last completed /chat request&quot;)
+TOK_COMPLETION = Gauge(&quot;chat_completion_tokens&quot;, &quot;Completion tokens for the last completed /chat request&quot;)
+TOK_TOTAL = Gauge(&quot;chat_total_tokens&quot;, &quot;Total tokens for the last completed /chat request&quot;)
+
+
+class ChatRequest(BaseModel):
+    question: str
+    k: int = 4
+    max_tokens: int = 200
+    temperature: float = 0.1
+    debug: bool = False  # when true, include prompt/messages in response
+
+
+def _label(meta: Dict[str, Any]) -&gt; str:
+    did = (meta or {}).get(&quot;doc_id&quot;)
+    sec = (meta or {}).get(&quot;section&quot;)
+    if not did:
+        return &quot;unknown&quot;
+    return f&quot;{did}#{sec}&quot; if sec and sec != &quot;full&quot; else did
+
+
+def _collect_citations(hits: List[Dict[str, Any]]) -&gt; List[str]:
+    seen, out = set(), []
+    for h in hits:
+        lab = _label(h.get(&quot;meta&quot;))
+        if lab not in seen:
+            seen.add(lab)
+            out.append(lab)
+    return out
+
+
+def _normalize_hits(hits: List[Dict[str, Any]]) -&gt; List[Dict[str, Any]]:
+    # Drop recent_queries from grounding context (they’re noisy)
+    filt = []
+    for h in hits:
+        did = ((h.get(&quot;meta&quot;) or {}).get(&quot;doc_id&quot;) or &quot;&quot;).lower()
+        if did.startswith(&quot;recent_queries.jsonl&quot;):
+            continue
+        filt.append(h)
+
+    # Prefer those with text first
+    filt.sort(key=lambda h: (h.get(&quot;text&quot;) is None), reverse=False)
+
+    # Dedup by label
+    seen, dedup = set(), []
+    for h in filt:
+        lab = _label(h.get(&quot;meta&quot;))
+        if lab in seen:
+            continue
+        seen.add(lab)
+        dedup.append(h)
+
+    # Trim by count and char budget
+    total = 0
+    trimmed = []
+    for h in dedup:
+        txt = h.get(&quot;text&quot;) or (h.get(&quot;meta&quot;) or {}).get(&quot;text&quot;) or &quot;&quot;
+        if len(trimmed) &lt; MAX_CTX_SNIPPETS and total + len(txt) &lt;= MAX_CTX_CHARS:
+            trimmed.append(h)
+            total += len(txt)
+        if len(trimmed) &gt;= MAX_CTX_SNIPPETS:
+            break
+
+    return trimmed
+
+
+def _strip_existing_source(txt: str) -&gt; str:
+    lines = txt.rstrip().splitlines()
+    kept = [ln for ln in lines if not ln.strip().lower().startswith(&quot;source:&quot;)]
+    return &quot;\n&quot;.join(kept).rstrip()
+
+
+@app.get(&quot;/health&quot;)
+def health():
+    return {&quot;ok&quot;: True, &quot;retriever&quot;: RETRIEVER_URL, &quot;vllm&quot;: VLLM_URL, &quot;model&quot;: MODEL_NAME}
+
+
+@app.get(&quot;/metrics&quot;)
+def metrics():
+    # Expose Prometheus metrics
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get(&quot;/dryrun&quot;)
+def dryrun(q: str = Query(..., alias=&quot;question&quot;), k: int = 4):
+    &quot;&quot;&quot;Build exactly what /chat would send to vLLM, but don’t call vLLM.&quot;&quot;&quot;
+    REQS.labels(route=&quot;/dryrun&quot;).inc()
+    with httpx.Client(timeout=30) as cx:
+        t_r0 = time.time()
+        try:
+            r = cx.post(f&quot;{RETRIEVER_URL}/search&quot;, json={&quot;query&quot;: q, &quot;k&quot;: k})
+            r.raise_for_status()
+            raw_hits = r.json().get(&quot;hits&quot;, [])
+        except Exception:
+            ERRS.labels(stage=&quot;retriever&quot;).inc()
+            raise
+        finally:
+            RAG_LAT.observe(time.time() - t_r0)
+
+    ctx_hits   = _normalize_hits(raw_hits)
+    citations  = _collect_citations(ctx_hits)
+    messages   = build_messages(q, ctx_hits)
+
+    # Also surface the precise snippets we used (label + text)
+    used_snippets = []
+    for h in ctx_hits:
+        meta = h.get(&quot;meta&quot;) or {}
+        used_snippets.append({
+            &quot;label&quot;: _label(meta),
+            &quot;text&quot;: h.get(&quot;text&quot;) or meta.get(&quot;text&quot;) or &quot;&quot;
+        })
+
+    return {
+        &quot;question&quot;: q,
+        &quot;citations&quot;: citations,
+        &quot;used_snippets&quot;: used_snippets,   # what the model will actually see
+        &quot;messages&quot;: messages,             # the exact OpenAI Chat payload
+        &quot;note&quot;: &quot;This is a dry run; no LLM call was made.&quot;
+    }
+
+
+@app.post(&quot;/chat&quot;)
+def chat(req: ChatRequest):
+    REQS.labels(route=&quot;/chat&quot;).inc()
+    t0 = time.time()
+
+    # 1) retrieve
+    with httpx.Client(timeout=30) as cx:
+        t_r0 = time.time()
+        try:
+            r = cx.post(f&quot;{RETRIEVER_URL}/search&quot;, json={&quot;query&quot;: req.question, &quot;k&quot;: req.k})
+            r.raise_for_status()
+            raw_hits = r.json().get(&quot;hits&quot;, [])
+        except Exception:
+            ERRS.labels(stage=&quot;retriever&quot;).inc()
+            raise
+        finally:
+            RAG_LAT.observe(time.time() - t_r0)
+
+    # 2) normalize + citations
+    ctx_hits  = _normalize_hits(raw_hits)
+    citations = _collect_citations(ctx_hits)
+
+    # 3) build messages with actual snippet text
+    messages = build_messages(req.question, ctx_hits)
+
+    # 4) call vLLM (OpenAI-compatible)
+    temperature = max(0.0, min(req.temperature, 0.5))
+    max_tokens  = min(req.max_tokens, 256)
+    payload = {
+        &quot;model&quot;: MODEL_NAME,
+        &quot;messages&quot;: messages,
+        &quot;temperature&quot;: temperature,
+        &quot;top_p&quot;: 0.9,
+        &quot;max_tokens&quot;: max_tokens,
+        &quot;stream&quot;: False,
+    }
+
+    with httpx.Client(timeout=120) as cx:
+        t_llm0 = time.time()
+        try:
+            rr = cx.post(f&quot;{VLLM_URL}/v1/chat/completions&quot;, json=payload)
+            rr.raise_for_status()
+            data = rr.json()
+        except Exception:
+            ERRS.labels(stage=&quot;vllm&quot;).inc()
+            raise
+        finally:
+            VLLM_LAT.observe(time.time() - t_llm0)
+
+    content = data[&quot;choices&quot;][0][&quot;message&quot;][&quot;content&quot;]
+    usage   = data.get(&quot;usage&quot;, {})
+    dt      = time.time() - t0
+
+    content = _strip_existing_source(content)
+    content = content + (&quot;\nSource: &quot; + &quot;; &quot;.join(citations) if citations else &quot;\nSource: (none)&quot;)
+
+    # Update token gauges (best-effort)
+    try:
+        TOK_PROMPT.set(float(usage.get(&quot;prompt_tokens&quot;, 0) or 0))
+        TOK_COMPLETION.set(float(usage.get(&quot;completion_tokens&quot;, 0) or 0))
+        TOK_TOTAL.set(float(usage.get(&quot;total_tokens&quot;, 0) or 0))
+    except Exception:
+        # Avoid failing the request if usage is missing or malformed
+        pass
+
+    # Observe end-to-end latency
+    E2E_LAT.observe(dt)
+
+    resp = {
+        &quot;answer&quot;: content,
+        &quot;citations&quot;: citations,
+        &quot;latency_seconds&quot;: round(dt, 3),
+        &quot;usage&quot;: usage,
+    }
+
+    # 5) optional debug payload so you can inspect exactly what was sent
+    if req.debug:
+        used_snippets = []
+        for h in ctx_hits:
+            meta = h.get(&quot;meta&quot;) or {}
+            used_snippets.append({
+                &quot;label&quot;: _label(meta),
+                &quot;text&quot;: h.get(&quot;text&quot;) or meta.get(&quot;text&quot;) or &quot;&quot;
+            })
+        resp[&quot;debug&quot;] = {
+            &quot;messages&quot;: messages,         # exact system+user messages sent
+            &quot;used_snippets&quot;: used_snippets,
+            &quot;raw_hits&quot;: raw_hits[:10],    # original retriever output (trimmed)
+            &quot;payload_model&quot;: MODEL_NAME,
+            &quot;payload_temperature&quot;: temperature,
+            &quot;payload_max_tokens&quot;: max_tokens,
+        }
+
+    return resp
+</code></pre>
+<p>Update  deployment spec to install <code>prometheus-client&gt;=0.20.0</code>.</p>
+<p>File: <code>k8s/40-serve/deploy-chat-api.yaml</code></p>
+<pre><code>        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            pip install --no-cache-dir fastapi==0.112.2 uvicorn==0.30.6 httpx==0.27.2  prometheus-client&gt;=0.20.0
+            uvicorn chat_api:app --host 0.0.0.0 --port 8080 --proxy-headers
+</code></pre>
+<p>Redeploy chat api as </p>
+<pre><code>kubectl delete -f k8s/40-serve/deploy-retriever.yaml
+kubectl apply -f k8s/40-serve/deploy-retriever.yaml
+</code></pre>
+<hr />
+<h3 id="b-retriever-add-prometheus-metrics-ragretrieverpy">B) Retriever — add Prometheus metrics (<code>rag/retriever.py</code>)</h3>
+<p>Replace your retriever with this version (adds <code>/metrics</code>, latency histogram, request counter):</p>
+<pre><code>import os
+import json
+from pathlib import Path
+from typing import List, Optional, Tuple, Any
+
+from fastapi import FastAPI, HTTPException, Response
+from pydantic import BaseModel
+
+# --- Prometheus (only new dependency) ---
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
+
+BACKEND    = os.getenv(&quot;BACKEND&quot;, &quot;dense&quot;)  # &quot;sparse&quot; or &quot;dense&quot;
+INDEX_PATH = Path(os.getenv(&quot;INDEX_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/index.faiss&quot;))
+META_PATH  = Path(os.getenv(&quot;META_PATH&quot;,  &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/meta.json&quot;))
+MODEL_DIR  = os.getenv(&quot;MODEL_DIR&quot;)  # optional for dense
+MODEL_NAME = os.getenv(&quot;MODEL_NAME&quot;, &quot;sentence-transformers/all-MiniLM-L6-v2&quot;)
+
+app = FastAPI(title=f&quot;Atharva Retriever ({BACKEND})&quot;)
+
+class SearchRequest(BaseModel):
+    query: str
+    k: int = 4
+
+_ready_reason = &quot;starting&quot;
+_model = None; _index = None; _meta: List[dict] = []
+_vec = None; _X = None  # sparse objects
+
+# ------------------ Prometheus metrics (added) ------------------
+REQS_TOTAL = Counter(&quot;retriever_requests_total&quot;, &quot;Total /search requests&quot;)
+ERRS_TOTAL = Counter(&quot;retriever_errors_total&quot;, &quot;Total retriever errors&quot;, [&quot;stage&quot;])
+E2E_LAT = Histogram(
+    &quot;retriever_search_latency_seconds&quot;,
+    &quot;End-to-end /search latency (s)&quot;,
+    buckets=(0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2),
+)
+# Dense sub-steps
+ENC_LAT = Histogram(
+    &quot;retriever_dense_encode_latency_seconds&quot;,
+    &quot;SentenceTransformer.encode latency (s)&quot;,
+    buckets=(0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2),
+)
+FAISS_LAT = Histogram(
+    &quot;retriever_dense_faiss_latency_seconds&quot;,
+    &quot;FAISS search latency (s)&quot;,
+    buckets=(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1),
+)
+# Sparse sub-steps
+VEC_LAT = Histogram(
+    &quot;retriever_sparse_vectorize_latency_seconds&quot;,
+    &quot;TF-IDF vectorizer.transform latency (s)&quot;,
+    buckets=(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1),
+)
+DOT_LAT = Histogram(
+    &quot;retriever_sparse_dot_latency_seconds&quot;,
+    &quot;Sparse dot/matmul latency (s)&quot;,
+    buckets=(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1),
+)
+# Load-time &amp; sizes
+MODEL_LOAD_SEC = Gauge(&quot;retriever_model_load_seconds&quot;, &quot;Dense model load time (s)&quot;)
+INDEX_LOAD_SEC = Gauge(&quot;retriever_index_load_seconds&quot;, &quot;FAISS index load time (s)&quot;)
+SPARSE_VEC_LOAD_SEC = Gauge(&quot;retriever_sparse_vectorizer_load_seconds&quot;, &quot;TF-IDF vectorizer load time (s)&quot;)
+SPARSE_MAT_LOAD_SEC = Gauge(&quot;retriever_sparse_matrix_load_seconds&quot;, &quot;TF-IDF matrix load time (s)&quot;)
+INDEX_ITEMS = Gauge(&quot;retriever_index_items&quot;, &quot;Items in index/matrix&quot;)
+META_ITEMS = Gauge(&quot;retriever_meta_items&quot;, &quot;Number of meta records&quot;)
+
+# ------------------ Utils ------------------
+
+def _normalize_meta_loaded(data: Any) -&gt; List[dict]:
+    &quot;&quot;&quot;
+    Accepts various shapes of meta.json and returns a list of entries.
+    Supported:
+      - list[dict]
+      - {&quot;items&quot;: [...]}  (common pattern)
+      - {&quot;hits&quot;: [...]}   (fallback)
+    &quot;&quot;&quot;
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+            # keep original behavior
+        if &quot;items&quot; in data and isinstance(data[&quot;items&quot;], list):
+            return data[&quot;items&quot;]
+        if &quot;hits&quot; in data and isinstance(data[&quot;hits&quot;], list):
+            return data[&quot;hits&quot;]
+    raise ValueError(&quot;META_PATH must contain a list or a dict with 'items'/'hits'.&quot;)
+
+def _parse_doc_and_section(path: Optional[str]) -&gt; Tuple[str, Optional[str]]:
+    &quot;&quot;&quot;
+    Parse labels from meta.path:
+      - 'treatments.json#0' -&gt; ('treatments.json', '0')
+      - 'faq.md'            -&gt; ('faq.md', None)
+      - 'policies/emergency.md' -&gt; ('policies/emergency.md', None)
+    &quot;&quot;&quot;
+    if not path:
+        return &quot;unknown&quot;, None
+    if &quot;#&quot; in path:
+        d, s = path.split(&quot;#&quot;, 1)
+        return d, s
+    return path, None
+
+def _extract_text(m: dict) -&gt; Optional[str]:
+    &quot;&quot;&quot;Try common keys for stored chunk text.&quot;&quot;&quot;
+    return m.get(&quot;text&quot;) or m.get(&quot;chunk&quot;) or m.get(&quot;content&quot;)
+
+def _enrich_hit(idx: int, score: float) -&gt; dict:
+    &quot;&quot;&quot;
+    Build a single enriched hit from meta[idx].
+    &quot;&quot;&quot;
+    if idx &lt; 0 or idx &gt;= len(_meta):
+        doc_id, section, path, typ, txt = &quot;unknown&quot;, None, None, None, None
+    else:
+        m   = _meta[idx] or {}
+        path = m.get(&quot;path&quot;)
+        typ  = m.get(&quot;type&quot;)
+        doc_id, section = _parse_doc_and_section(path)
+        txt = _extract_text(m)
+
+    hit = {
+        &quot;score&quot;: float(score),
+        &quot;meta&quot;: {
+            &quot;doc_id&quot;: doc_id,
+            &quot;section&quot;: section,
+            &quot;path&quot;: path,
+            &quot;type&quot;: typ,
+        },
+    }
+    if txt:
+        hit[&quot;text&quot;] = txt
+    return hit
+
+# ------------------ Loaders (unchanged behavior; just timed gauges) ------------------
+
+def _load_dense():
+    global _model, _index, _meta
+    try:
+        import time as _t
+        import faiss
+        from sentence_transformers import SentenceTransformer
+
+        t0 = _t.time()
+        _model = SentenceTransformer(MODEL_DIR) if (MODEL_DIR and Path(MODEL_DIR).exists()) else SentenceTransformer(MODEL_NAME)
+        MODEL_LOAD_SEC.set(_t.time() - t0)
+
+        t1 = _t.time()
+        _index = faiss.read_index(str(INDEX_PATH))
+        INDEX_LOAD_SEC.set(_t.time() - t1)
+
+        _meta = _normalize_meta_loaded(json.loads(META_PATH.read_text(encoding=&quot;utf-8&quot;)))
+        META_ITEMS.set(len(_meta) if isinstance(_meta, list) else 0)
+
+        # best-effort size (for FAISS)
+        try:
+            INDEX_ITEMS.set(int(getattr(_index, &quot;ntotal&quot;, len(_meta))))
+        except Exception:
+            INDEX_ITEMS.set(len(_meta))
+
+        return None
+    except Exception as e:
+        return f&quot;dense load error: {e}&quot;
+
+def _load_sparse():
+    global _vec, _X, _meta
+    try:
+        import time as _t
+        import joblib
+        from scipy import sparse
+
+        vec_p = Path(os.getenv(&quot;VEC_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/tfidf_vectorizer.joblib&quot;))
+        X_p   = Path(os.getenv(&quot;MAT_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/tfidf_matrix.npz&quot;))
+
+        t0 = _t.time()
+        _vec = joblib.load(vec_p)
+        SPARSE_VEC_LOAD_SEC.set(_t.time() - t0)
+
+        t1 = _t.time()
+        _X = sparse.load_npz(X_p)  # assume rows L2-normalized; dot == cosine
+        SPARSE_MAT_LOAD_SEC.set(_t.time() - t1)
+
+        _meta = _normalize_meta_loaded(json.loads(META_PATH.read_text(encoding=&quot;utf-8&quot;)))
+        META_ITEMS.set(len(_meta) if isinstance(_meta, list) else 0)
+
+        try:
+            INDEX_ITEMS.set(int(getattr(_X, &quot;shape&quot;, (0, 0))[0]))
+        except Exception:
+            INDEX_ITEMS.set(len(_meta))
+
+        return None
+    except Exception as e:
+        return f&quot;sparse load error: {e}&quot;
+
+@app.on_event(&quot;startup&quot;)
+def startup():
+    global _ready_reason
+    _ready_reason = _load_sparse() if BACKEND == &quot;sparse&quot; else _load_dense()
+
+# ------------------ Endpoints (original behavior preserved) ------------------
+
+@app.get(&quot;/health&quot;)
+def health():
+    return {&quot;ok&quot;: True}
+
+@app.get(&quot;/ready&quot;)
+def ready():
+    return {&quot;ready&quot;: _ready_reason is None, &quot;reason&quot;: _ready_reason}
+
+@app.post(&quot;/reload&quot;)
+def reload_index():
+    global _ready_reason
+    _ready_reason = _load_sparse() if BACKEND == &quot;sparse&quot; else _load_dense()
+    if _ready_reason is not None:
+        raise HTTPException(status_code=503, detail=_ready_reason)
+    return {&quot;reloaded&quot;: True}
+
+# --- /metrics added (Prometheus text format) ---
+@app.get(&quot;/metrics&quot;)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.post(&quot;/search&quot;)
+def search(req: SearchRequest):
+    if _ready_reason is not None:
+        raise HTTPException(status_code=503, detail=_ready_reason)
+
+    import time as _t
+    t0 = _t.time()
+    REQS_TOTAL.inc()
+
+    k = max(1, min(int(req.k), 20))
+
+    if BACKEND == &quot;sparse&quot;:
+        try:
+            import numpy as np
+            t_vec0 = _t.time()
+            q = _vec.transform([req.query])
+        except Exception:
+            ERRS_TOTAL.labels(stage=&quot;sparse_vectorize&quot;).inc()
+            raise
+        finally:
+            VEC_LAT.observe(_t.time() - t_vec0)
+
+        try:
+            t_dot0 = _t.time()
+            scores = (_X @ q.T).toarray().ravel()  # cosine since rows normalized
+        except Exception:
+            ERRS_TOTAL.labels(stage=&quot;sparse_dot&quot;).inc()
+            raise
+        finally:
+            DOT_LAT.observe(_t.time() - t_dot0)
+
+        if scores.size == 0:
+            E2E_LAT.observe(_t.time() - t0)
+            return {&quot;hits&quot;: []}
+        # get top-k indices by score desc
+        k_eff = min(k, scores.size)
+        top = np.argpartition(-scores, range(k_eff))[:k_eff]
+        top = top[np.argsort(-scores[top])]
+        hits = [
+            _enrich_hit(int(i), float(scores[int(i)]))
+            for i in top
+            if scores[int(i)] &gt; 0
+        ]
+        E2E_LAT.observe(_t.time() - t0)
+        return {&quot;hits&quot;: hits}
+
+    # dense (unchanged behavior; with timing)
+    try:
+        import faiss
+        import numpy as np
+        t_enc0 = _t.time()
+        v = _model.encode([req.query], normalize_embeddings=True)  # IP ~ cosine
+    except Exception:
+        ERRS_TOTAL.labels(stage=&quot;dense_encode&quot;).inc()
+        raise
+    finally:
+        ENC_LAT.observe(_t.time() - t_enc0)
+
+    try:
+        t_faiss0 = _t.time()
+        D, I = _index.search(v.astype(&quot;float32&quot;), k)
+    except Exception:
+        ERRS_TOTAL.labels(stage=&quot;dense_faiss_search&quot;).inc()
+        raise
+    finally:
+        FAISS_LAT.observe(_t.time() - t_faiss0)
+
+    hits = []
+    for score, idx in zip(D[0].tolist(), I[0].tolist()):
+        if idx == -1:
+            continue
+        hits.append(_enrich_hit(int(idx), float(score)))
+
+    E2E_LAT.observe(_t.time() - t0)
+    return {&quot;hits&quot;: hits}
+</code></pre>
+<p>Update  deployment spec to install <code>prometheus-client&gt;=0.20.0</code>.</p>
+<p>File: <code>k8s/40-serve/deploy-retriever.yaml</code></p>
+<pre><code>            python -m pip install --upgrade pip
+            if [ &quot;${BACKEND:-sparse}&quot; = &quot;sparse&quot; ]; then
+              # Pure sparse stack (forces wheels only; will fail if a wheel is unavailable for your arch)
+              python -m pip install --only-binary=:all: \
+                &quot;numpy==1.26.4&quot; &quot;scipy==1.10.1&quot; &quot;scikit-learn==1.3.2&quot; joblib==1.4.2 \
+                fastapi==0.112.2 uvicorn==0.30.6 prometheus-client&gt;=0.20.0
+</code></pre>
+<p>Redeploy chat api as </p>
+<pre><code>kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
+kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+</code></pre>
+<blockquote>
+<p>No rebuild needed—these run from the mounted repo (<code>/mnt/project</code>).</p>
+</blockquote>
+<hr />
+<h2 id="2-servicemonitors">2) ServiceMonitors</h2>
+<blockquote>
+<p>These tell Prometheus which Services to scrape. We’ll scrape:</p>
+</blockquote>
+<ul>
+<li>
+<p><strong>vLLM</strong> on <code>atharva-ml/atharva-vllm:8000/metrics</code></p>
+</li>
+<li>
+<p><strong>Chat API</strong> on <code>atharva-app/atharva-chat-api:8080/metrics</code></p>
+</li>
+<li>
+<p><strong>Retriever</strong> on <code>atharva-ml/atharva-retriever:8001/metrics</code></p>
+</li>
+</ul>
+<p>Create these under <code>k8s/50-observability/</code>.</p>
+<pre><code>cd project/atharva-dental-assistant
+mkdir k8s/50-observability/
+</code></pre>
+<h3 id="k8s50-observabilitysm-vllmyaml"><code>k8s/50-observability/sm-vllm.yaml</code></h3>
+<pre><code>apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sm-atharva-vllm
+  namespace: monitoring
+  labels:
+    release: kps   # &lt;-- REQUIRED if your Prometheus CR uses selector.matchLabels.release
+spec:
+  namespaceSelector:
+    matchNames:
+      - atharva-ml
+  selector:
+    matchLabels:
+      app: isvc.atharva-vllm-predictor              # &lt;-- must match your Service’s label
+  endpoints:
+    - port: http1                    # &lt;-- must match the Service port *name*
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s             # optional, good practice
+
+</code></pre>
+<h3 id="k8s50-observabilitysm-chat-apiyaml"><code>k8s/50-observability/sm-chat-api.yaml</code></h3>
+<pre><code>apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sm-atharva-chat-api
+  namespace: monitoring
+  labels:
+    release: kps   # optional, add if your Prometheus selects by this
+spec:
+  namespaceSelector:
+    matchNames:
+      - atharva-app
+  selector:
+    matchLabels:
+      app: atharva-chat-api          # &lt;-- must match your Service’s label
+  endpoints:
+    - port: http                     # &lt;-- must match the Service port *name*
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s             # optional but recommended
+</code></pre>
+<h3 id="k8s50-observabilitysm-retrieveryaml"><code>k8s/50-observability/sm-retriever.yaml</code></h3>
+<pre><code>apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sm-atharva-retriever
+  namespace: monitoring
+  labels:
+    release: kps   # optional; include if your Prometheus uses this selector
+spec:
+  namespaceSelector:
+    matchNames:
+      - atharva-ml
+  selector:
+    matchLabels:
+      app: retriever         # &lt;-- must match your Service’s label
+  endpoints:
+    - port: http    # &lt;-- must match the port *name* in Service
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s             # optional, safe default
+</code></pre>
+<p><em>(Your Services from previous labs used port names <code>http</code>. If you changed them, reflect the right name here.)</em></p>
+<hr />
+<h2 id="3-optional-alerts-prometheusrule">3) (Optional) Alerts (PrometheusRule)</h2>
+<p>Basic examples to show how you’d alert on high error rate or slow E2E latency.</p>
+<h3 id="k8s50-observabilitypr-alertsyaml"><code>k8s/50-observability/pr-alerts.yaml</code></h3>
+<pre><code>apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: atharva-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: atharva-chat
+    rules:
+    - alert: ChatApiHighErrorRate
+      expr: sum(rate(chat_errors_total[5m])) by (stage) / sum(rate(chat_requests_total[5m])) by () &gt; 0.05
+      for: 5m
+      labels: { severity: warning }
+      annotations:
+        summary: &quot;Chat API error rate &gt; 5% (stage={{ $labels.stage }})&quot;
+    - alert: ChatApiLatencyHighP95
+      expr: histogram_quantile(0.95, sum(rate(chat_end_to_end_latency_seconds_bucket[5m])) by (le)) &gt; 3
+      for: 10m
+      labels: { severity: warning }
+      annotations:
+        summary: &quot;Chat API p95 latency &gt; 3s&quot;
+</code></pre>
+<hr />
+<h2 id="4-grafana-dashboard-configmap">4) Grafana dashboard (ConfigMap)</h2>
+<p>A concise starter dashboard with:</p>
+<ul>
+<li>
+<p>E2E latency p50/p95</p>
+</li>
+<li>
+<p>Requests &amp; errors</p>
+</li>
+<li>
+<p>Tokens (prompt/comp/total)</p>
+</li>
+<li>
+<p>Retriever latency p95</p>
+</li>
+<li>
+<p>vLLM tokens/sec (if exported by your vLLM build)</p>
+</li>
+</ul>
+<h3 id="k8s50-observabilitycm-grafana-dashboardyaml"><code>k8s/50-observability/cm-grafana-dashboard.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atharva-llmops-dashboard2
+  namespace: monitoring
+  labels:
+    grafana_dashboard: &quot;1&quot;
+data:
+  atharva-llmops.json: |
+    {
+      &quot;title&quot;: &quot;Atharva LLMOps - Overview&quot;,
+      &quot;timezone&quot;: &quot;browser&quot;,
+      &quot;schemaVersion&quot;: 39,
+      &quot;version&quot;: 2,
+      &quot;panels&quot;: [
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Chat RPS&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum(rate(chat_requests_total[1m]))&quot; } ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 0, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat Errors by Stage (/s)&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum by (stage) (rate(chat_errors_total[1m]))&quot; } ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 0, &quot;w&quot;: 18, &quot;h&quot;: 6 }
+        },
+
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat E2E Latency (p50/p95)&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;histogram_quantile(0.50, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p50&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p95&quot; }
+          ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 4, &quot;w&quot;: 12, &quot;h&quot;: 7 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat Sub-steps p95 (Retriever &amp; vLLM)&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(rag_retrieval_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;retriever (inside chat)&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm_request_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;vLLM (inside chat)&quot; }
+          ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 4, &quot;w&quot;: 12, &quot;h&quot;: 7 }
+        },
+
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Retriever RPS&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum(rate(retriever_requests_total[1m]))&quot; } ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 11, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Errors by Stage (/s)&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum by (stage) (rate(retriever_errors_total[1m]))&quot; } ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 11, &quot;w&quot;: 18, &quot;h&quot;: 6 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Search Latency (p50/p95)&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;histogram_quantile(0.50, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p50&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p95&quot; }
+          ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 17, &quot;w&quot;: 12, &quot;h&quot;: 7 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Sub-steps p95 (Dense/Sparse)&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_dense_encode_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;dense encode&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_dense_faiss_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;dense faiss&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_vectorize_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;sparse vectorize&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_dot_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;sparse dot&quot; }
+          ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 17, &quot;w&quot;: 12, &quot;h&quot;: 7 }
+        },
+
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Prompt Tokens (last)&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_prompt_tokens&quot; } ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Completion Tokens (last)&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_completion_tokens&quot; } ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Total Tokens (last)&quot;,
+          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_total_tokens&quot; } ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;vLLM Tokens/sec&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;sum(rate(vllm:prompt_tokens_total[5m]))&quot;, &quot;legendFormat&quot;: &quot;prompt t/s&quot; },
+            { &quot;expr&quot;: &quot;sum(rate(vllm:generation_tokens_total[5m]))&quot;, &quot;legendFormat&quot;: &quot;generation t/s&quot; }
+          ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 18, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 6 }
+        },
+        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;vLLM Latencies (p95)&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;TTFT p95&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;E2E p95&quot; },
+            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:request_inference_time_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;inference p95&quot; }
+          ],
+          &quot;legend&quot;: { &quot;show&quot;: true },
+          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 28, &quot;w&quot;: 12, &quot;h&quot;: 7 }
+        },
+        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;vLLM Queue / Running&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;sum(vllm:num_requests_waiting)&quot;, &quot;legendFormat&quot;: &quot;waiting&quot; },
+            { &quot;expr&quot;: &quot;sum(vllm:num_requests_running)&quot;, &quot;legendFormat&quot;: &quot;running&quot; }
+          ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 28, &quot;w&quot;: 6, &quot;h&quot;: 4 }
+        },
+
+        { &quot;type&quot;: &quot;table&quot;, &quot;title&quot;: &quot;Retriever Index &amp; Meta Sizes&quot;,
+          &quot;targets&quot;: [
+            { &quot;expr&quot;: &quot;retriever_index_items&quot;, &quot;legendFormat&quot;: &quot;index_items&quot; },
+            { &quot;expr&quot;: &quot;retriever_meta_items&quot;, &quot;legendFormat&quot;: &quot;meta_items&quot; }
+          ],
+          &quot;gridPos&quot;: { &quot;x&quot;: 18, &quot;y&quot;: 30, &quot;w&quot;: 6, &quot;h&quot;: 5 }
+        }
+      ]
+    }
+</code></pre>
+<p>Also update the existing service spec to add relevant labels which are then used by prometheus service monitor to scrape the metrics from </p>
+<p>File : <code>k8s/40-serve/svc-retriever.yaml</code></p>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: atharva-retriever
+  namespace: atharva-ml
+  labels:
+    app: retriever
+spec:
+  type: NodePort
+  selector: { app: retriever }
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    nodePort: 30100
+</code></pre>
+<p>File : <code>k8s/40-serve/svc-chat-api.yaml</code></p>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: atharva-chat-api
+  namespace: atharva-app
+  labels:
+    app: atharva-chat-api
+spec:
+  type: NodePort
+  selector: { app: atharva-chat-api }
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30300
+</code></pre>
+<p>Apply service changes </p>
+<pre><code>kubectl apply -f k8s/40-serve/svc-retriever.yaml
+kubectl apply -f k8s/40-serve/svc-chat-api.yaml
+</code></pre>
+<hr />
+<h2 id="5-deploy-all-observability-bits">5) Deploy all observability bits</h2>
+<h3 id="scriptsdeploy_observabilitysh"><code>scripts/deploy_observability.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+# Apply ServiceMonitors + Alerts + Dashboard
+kubectl apply -f k8s/50-observability/sm-vllm.yaml
+kubectl apply -f k8s/50-observability/sm-chat-api.yaml
+kubectl apply -f k8s/50-observability/sm-retriever.yaml
+kubectl apply -f k8s/50-observability/cm-grafana-dashboard.yaml
+kubectl apply -f k8s/50-observability/pr-alerts.yaml || true
+
+echo &quot;Waiting a bit for Prometheus to pick up targets...&quot;
+sleep 10
+
+echo &quot;List ServiceMonitors:&quot;
+kubectl -n monitoring get servicemonitors
+echo &quot;Prometheus targets (check Up status via UI).&quot;
+
+echo -e &quot;Access Prometheus and Grafana using\n\
+  * Prometheus : http://localhost:30500/\n\
+  * Grafana : http://localhost:30400/\n\
+    * user: admin\n\
+    * pass: prom-operator&quot;
+
+</code></pre>
+<hr />
+<h2 id="6-run-the-lab">6) Run the lab</h2>
+<pre><code># Make sure Lab 4 services are running:
+kubectl -n atharva-ml get svc atharva-vllm atharva-retriever
+kubectl -n atharva-app get svc atharva-chat-api
+
+# Deploy observability
+bash scripts/deploy_observability.sh
+</code></pre>
+<p>Open Grafana at <a href="http://127.0.0.1:3000/">http://127.0.0.1:3000</a>
+(Default admin/admin unless you changed it via Helm values.)</p>
+<ul>
+<li>
+<p>Find dashboard: <strong>“Atharva LLMOps - Overview”</strong>.</p>
+</li>
+<li>
+<p>Generate some traffic (reuse Lab 4’s <code>smoke_e2e.sh</code> a few times) and watch:</p>
+</li>
+<li>
+<p><strong>Chat RPS</strong>, <strong>errors by stage</strong>,</p>
+</li>
+<li>
+<p><strong>E2E p50/p95</strong>, <strong>Retriever p95</strong>,</p>
+</li>
+<li>
+<p><strong>Tokens gauges</strong>,</p>
+</li>
+<li>
+<p>(If present) <strong>vLLM tokens/sec</strong>.</p>
+</li>
+</ul>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Exported <strong>custom metrics</strong> from Chat API &amp; Retriever.</p>
+</li>
+<li>
+<p>Scraped <strong>vLLM</strong> metrics alongside app metrics via <strong>ServiceMonitors</strong>.</p>
+</li>
+<li>
+<p>Visualized a consolidated <strong>LLMOps dashboard</strong> in Grafana.</p>
+</li>
+<li>
+<p>(Optional) Added <strong>alerts</strong> on error rate and latency.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab04/" class="btn btn-neutral float-left" title="Lab 04 - Serving with Kserve and vLLM"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../lab06/" class="btn btn-neutral float-right" title="Lab 06 - Autoscaling vLLM + RAG + Chat API">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab04/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../lab06/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

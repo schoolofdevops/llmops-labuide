@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://kubernetes-tutorial.schoolofdevops.com/lab04/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 04 - Serving with Kserve and vLLM - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 04 - Serving with Kserve and vLLM";
+        var mkdocs_page_input_path = "lab04.md";
+        var mkdocs_page_url = "/lab04/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 04 - Serving with Kserve and vLLM</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#goal">Goal</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#repo-additions-this-lab">Repo additions (this lab)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-vllm-with-imagevolume-kserve-rawdeployment">1) vLLM with ImageVolume (KServe RawDeployment)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s40-serverawdeployment-vllmyaml">k8s/40-serve/rawdeployment-vllm.yaml</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s40-servesvc-vllmyaml">k8s/40-serve/svc-vllm.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-chat-api-rag-prompt-vllm">2) Chat API (RAG → prompt → vLLM)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#servingprompt_templatespy">serving/prompt_templates.py</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#servingchat_apipy">serving/chat_api.py</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-k8s-manifests-for-chat-api">3) K8s manifests for Chat API</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s40-servecm-chat-apiyaml">k8s/40-serve/cm-chat-api.yaml</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s40-servedeploy-chat-apiyaml">k8s/40-serve/deploy-chat-api.yaml</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s40-servesvc-chat-apiyaml">k8s/40-serve/svc-chat-api.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-helper-scripts">4) Helper scripts</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#scriptsdeploy_vllmsh">scripts/deploy_vllm.sh</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#scriptsdeploy_chat_apish">scripts/deploy_chat_api.sh</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#scriptssmoke_e2esh">scripts/smoke_e2e.sh</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-install-kserve">5) Install Kserve</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-run-the-lab">5) Run the lab</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#quick-local-validation">Quick local validation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#1-model-list">1) Model list</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-simple-chat-completion">2) Simple chat completion</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#3-legacy-completions-optional">3) Legacy completions (optional)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#4-chat-api">4) chat API</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#5-to-see-whats-being-sent-to-the-llm">5) To see whats being sent to the LLM</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#lab-summary">Lab Summary</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 04 - Serving with Kserve and vLLM</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab04.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-4-vllm-serving-kserve-rawdeployment-rag-aware-chat-api">Lab 4 — vLLM Serving (KServe RawDeployment) + RAG-aware Chat API</h1>
+<h2 id="goal">Goal</h2>
+<ul>
+<li>
+<p>Serve the <strong>merged SmolLM2-135M</strong> from Lab 2 via <strong>vLLM</strong>.</p>
+</li>
+<li>
+<p>Mount the model snapshot with <strong>ImageVolumes</strong>.</p>
+</li>
+<li>
+<p>Deploy a <strong>Chat API</strong> (FastAPI) that:</p>
+</li>
+<li>
+<p>calls the <strong>Retriever</strong> (Lab 1) for top-k context,</p>
+</li>
+<li>
+<p>composes a safe system prompt (Pune/INR, clinic context),</p>
+</li>
+<li>
+<p>calls <strong>vLLM’s OpenAI-compatible</strong> endpoint,</p>
+</li>
+<li>
+<p>returns answer + citations + basic timing/token stats.</p>
+</li>
+</ul>
+<blockquote>
+<p>Namespaces:</p>
+</blockquote>
+<ul>
+<li>
+<p><strong>atharva-ml</strong>: vLLM server</p>
+</li>
+<li>
+<p><strong>atharva-app</strong>: Chat API (or keep all in atharva-ml if you prefer)</p>
+</li>
+</ul>
+<hr />
+<h2 id="repo-additions-this-lab">Repo additions (this lab)</h2>
+<pre><code>atharva-dental-assistant/
+├─ serving/
+│  ├─ chat_api.py
+│  └─ prompt_templates.py
+├─ k8s/
+│  └─ 40-serve/
+│     ├─ rawdeployment-vllm.yaml          # KServe RawDeployment (preferred)
+│     ├─ svc-vllm.yaml
+│     ├─ deploy-chat-api.yaml
+│     ├─ svc-chat-api.yaml
+│     └─ cm-chat-api.yaml
+└─ scripts/
+   ├─ deploy_vllm.sh
+   ├─ deploy_chat_api.sh
+   └─ smoke_e2e.sh
+</code></pre>
+<blockquote>
+<p>Assumes you already built &amp; pushed your model image to the local registry in <strong>Lab 3</strong> as:
+<code>kind-registry:5001/atharva/smollm2-135m-merged:v1</code></p>
+</blockquote>
+<hr />
+<pre><code>cd project/atharva-dental-assistant
+
+</code></pre>
+<h2 id="1-vllm-with-imagevolume-kserve-rawdeployment">1) vLLM with ImageVolume (KServe RawDeployment)</h2>
+<h3 id="k8s40-serverawdeployment-vllmyaml"><code>k8s/40-serve/rawdeployment-vllm.yaml</code></h3>
+<pre><code>apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: atharva-vllm
+  namespace: atharva-ml
+  annotations:
+    autoscaling.knative.dev/metric: &quot;concurrency&quot;
+    autoscaling.knative.dev/target: &quot;1&quot;
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    containerConcurrency: 1
+    containers:
+      - name: vllm
+        image: schoolofdevops/vllm-cpu-nonuma:0.9.1
+        args:
+          - --model=/models/model
+          - --host=0.0.0.0
+          - --port=8000               # KServe/Knative-friendly
+          - --max-model-len=2048
+          - --served-model-name=smollm2-135m-atharva
+          - --dtype=float16           # keeps RAM lower on CPU for this tiny model
+          - --disable-frontend-multiprocessing
+          - --max-num-seqs=1          # clamp engine concurrency (OOM guard)
+          - --swap-space=0.5          # GiB reserved for CPU KV cache (fits small pod)
+        env:
+          - name: VLLM_TARGET_DEVICE
+            value: &quot;cpu&quot;
+          - name: VLLM_CPU_KVCACHE_SPACE
+            value: &quot;1&quot;
+          - name: OMP_NUM_THREADS
+            value: &quot;2&quot;
+          - name: OPENBLAS_NUM_THREADS
+            value: &quot;1&quot;
+          - name: MKL_NUM_THREADS
+            value: &quot;1&quot;
+          - name: VLLM_CPU_OMP_THREADS_BIND
+            value: &quot;0-1&quot;              # avoid NUMA auto-binding path
+        ports:
+          - name: http1
+            containerPort: 8000
+        resources:
+          requests:
+            cpu: &quot;2&quot;
+            memory: &quot;2Gi&quot;
+          limits:
+            cpu: &quot;2&quot;
+            memory: &quot;3Gi&quot;             # bump to 4Gi if you still see OOM
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        volumeMounts:
+          - name: model
+            mountPath: /models
+            readOnly: true
+    # Pinning to a node is fine; nodeSelector is usually nicer than nodeName:
+    # nodeSelector:
+    #   kubernetes.io/hostname: llmops-kind-worker
+    nodeName: llmops-kind-worker
+    volumes:
+      - name: model
+        image:
+          reference: initcron/smollm2-135m-merged:v3
+          pullPolicy: IfNotPresent
+</code></pre>
+<p>where, replace <code>initcron/smollm2-135m-merged:v2</code> with actual tag. </p>
+<blockquote>
+<p>If your cluster CRD doesn’t support <code>RawDeployment</code>, you can temporarily deploy a <strong>plain Deployment</strong> (fallback) with the <strong>same container/volume spec</strong>. Keep going with the rest of the lab; the Chat API doesn’t care how vLLM is deployed as long as the Service is up.</p>
+</blockquote>
+<h3 id="k8s40-servesvc-vllmyaml"><code>k8s/40-serve/svc-vllm.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: atharva-vllm
+  namespace: atharva-ml
+spec:
+  type: NodePort
+  selector:
+    # KServe RawDeployment pods are labeled with app=&lt;deployment name&gt; by default
+    app: isvc.atharva-vllm-predictor
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    nodePort: 30200
+</code></pre>
+<hr />
+<h2 id="2-chat-api-rag-prompt-vllm">2) Chat API (RAG → prompt → vLLM)</h2>
+<pre><code>mkdir serving
+</code></pre>
+<h3 id="servingprompt_templatespy"><code>serving/prompt_templates.py</code></h3>
+<pre><code>SYSTEM_PROMPT = (
+  &quot;You are Atharva Dental Clinic assistant based in Pune, India. &quot;
+  &quot;Respond in concise steps, use INR as currency for any prices or costs, be safety-minded, first try to find the answer from the context provided here.&quot;
+  &quot;ask for missing info when necessary, and ALWAYS include a final 'Source:' line &quot;
+  &quot;citing file#section for facts derived from context.\n&quot;
+  &quot;If the question indicates emergency red flags (uncontrolled bleeding, facial swelling, high fever, trauma), &quot;
+  &quot;urge immediate contact with the clinic's emergency number.\n&quot;
+)
+
+def _label(meta: dict) -&gt; str:
+    did = (meta or {}).get(&quot;doc_id&quot;)
+    sec = (meta or {}).get(&quot;section&quot;)
+    if not did:
+        return &quot;unknown&quot;
+    return f&quot;{did}#{sec}&quot; if sec and sec != &quot;full&quot; else did
+
+def _render_context_block(retrieved_hits: list[dict]) -&gt; str:
+    &quot;&quot;&quot;
+    Render only label + text, no Python dicts.
+    &quot;&quot;&quot;
+    blocks: list[str] = []
+    for h in retrieved_hits:
+        meta = h.get(&quot;meta&quot;) or {}
+        label = _label(meta)
+        text = (h.get(&quot;text&quot;) or meta.get(&quot;text&quot;) or &quot;&quot;).strip()
+        if not text:
+            continue
+        blocks.append(f&quot;### {label}\n{text}&quot;)
+    return &quot;\n\n&quot;.join(blocks).strip()
+
+def build_messages(user_q: str, retrieved_hits: list[dict]) -&gt; list[dict]:
+    context_block = _render_context_block(retrieved_hits)
+    system = SYSTEM_PROMPT + &quot;\nContext snippets:\n&quot; + (context_block if context_block else &quot;(none)&quot;)
+    return [
+        {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: system},
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_q.strip()},
+    ]
+</code></pre>
+<h3 id="servingchat_apipy"><code>serving/chat_api.py</code></h3>
+<pre><code>import os
+import time
+import httpx
+from fastapi import FastAPI, Query
+from pydantic import BaseModel
+from typing import List, Dict, Any
+
+from prompt_templates import build_messages
+
+RETRIEVER_URL = os.getenv(&quot;RETRIEVER_URL&quot;, &quot;http://atharva-retriever.atharva-ml.svc.cluster.local:8001&quot;)
+VLLM_URL      = os.getenv(&quot;VLLM_URL&quot;,      &quot;http://atharva-vllm.atharva-ml.svc.cluster.local:8000&quot;)
+MODEL_NAME    = os.getenv(&quot;MODEL_NAME&quot;,    &quot;smollm2-135m-atharva&quot;)
+
+MAX_CTX_SNIPPETS = int(os.getenv(&quot;MAX_CTX_SNIPPETS&quot;, &quot;3&quot;))
+MAX_CTX_CHARS    = int(os.getenv(&quot;MAX_CTX_CHARS&quot;, &quot;2400&quot;))
+
+app = FastAPI()
+
+class ChatRequest(BaseModel):
+    question: str
+    k: int = 4
+    max_tokens: int = 200
+    temperature: float = 0.1
+    debug: bool = False  # &lt;— when true, include prompt/messages in response
+
+
+def _label(meta: Dict[str, Any]) -&gt; str:
+    did = (meta or {}).get(&quot;doc_id&quot;)
+    sec = (meta or {}).get(&quot;section&quot;)
+    if not did:
+        return &quot;unknown&quot;
+    return f&quot;{did}#{sec}&quot; if sec and sec != &quot;full&quot; else did
+
+def _collect_citations(hits: List[Dict[str, Any]]) -&gt; List[str]:
+    seen, out = set(), []
+    for h in hits:
+        lab = _label(h.get(&quot;meta&quot;))
+        if lab not in seen:
+            seen.add(lab); out.append(lab)
+    return out
+
+def _normalize_hits(hits: List[Dict[str, Any]]) -&gt; List[Dict[str, Any]]:
+    # Drop recent_queries from grounding context (they’re noisy)
+    filt = []
+    for h in hits:
+        did = ((h.get(&quot;meta&quot;) or {}).get(&quot;doc_id&quot;) or &quot;&quot;).lower()
+        if did.startswith(&quot;recent_queries.jsonl&quot;):
+            continue
+        filt.append(h)
+
+    # Prefer those with text first
+    filt.sort(key=lambda h: (h.get(&quot;text&quot;) is None), reverse=False)
+
+    # Dedup by label
+    seen, dedup = set(), []
+    for h in filt:
+        lab = _label(h.get(&quot;meta&quot;))
+        if lab in seen:
+            continue
+        seen.add(lab); dedup.append(h)
+
+    # Trim by count and char budget
+    total = 0; trimmed = []
+    for h in dedup:
+        txt = h.get(&quot;text&quot;) or (h.get(&quot;meta&quot;) or {}).get(&quot;text&quot;) or &quot;&quot;
+        if len(trimmed) &lt; MAX_CTX_SNIPPETS and total + len(txt) &lt;= MAX_CTX_CHARS:
+            trimmed.append(h); total += len(txt)
+        if len(trimmed) &gt;= MAX_CTX_SNIPPETS:
+            break
+
+    return trimmed
+
+def _strip_existing_source(txt: str) -&gt; str:
+    lines = txt.rstrip().splitlines()
+    kept = [ln for ln in lines if not ln.strip().lower().startswith(&quot;source:&quot;)]
+    return &quot;\n&quot;.join(kept).rstrip()
+
+@app.get(&quot;/health&quot;)
+def health():
+    return {&quot;ok&quot;: True, &quot;retriever&quot;: RETRIEVER_URL, &quot;vllm&quot;: VLLM_URL}
+
+@app.get(&quot;/dryrun&quot;)
+def dryrun(q: str = Query(..., alias=&quot;question&quot;), k: int = 4):
+    &quot;&quot;&quot;Build exactly what /chat would send to vLLM, but don’t call vLLM.&quot;&quot;&quot;
+    with httpx.Client(timeout=30) as cx:
+        r = cx.post(f&quot;{RETRIEVER_URL}/search&quot;, json={&quot;query&quot;: q, &quot;k&quot;: k})
+        r.raise_for_status()
+        raw_hits = r.json().get(&quot;hits&quot;, [])
+
+    ctx_hits   = _normalize_hits(raw_hits)
+    citations  = _collect_citations(ctx_hits)
+    messages   = build_messages(q, ctx_hits)
+
+    # Also surface the precise snippets we used (label + text)
+    used_snippets = []
+    for h in ctx_hits:
+        meta = h.get(&quot;meta&quot;) or {}
+        used_snippets.append({
+            &quot;label&quot;: _label(meta),
+            &quot;text&quot;: h.get(&quot;text&quot;) or meta.get(&quot;text&quot;) or &quot;&quot;
+        })
+
+    return {
+        &quot;question&quot;: q,
+        &quot;citations&quot;: citations,
+        &quot;used_snippets&quot;: used_snippets,   # what the model will actually see
+        &quot;messages&quot;: messages,             # the exact OpenAI Chat payload
+        &quot;note&quot;: &quot;This is a dry run; no LLM call was made.&quot;
+    }
+
+@app.post(&quot;/chat&quot;)
+def chat(req: ChatRequest):
+    t0 = time.time()
+
+    # 1) retrieve
+    with httpx.Client(timeout=30) as cx:
+        r = cx.post(f&quot;{RETRIEVER_URL}/search&quot;, json={&quot;query&quot;: req.question, &quot;k&quot;: req.k})
+        r.raise_for_status()
+        raw_hits = r.json().get(&quot;hits&quot;, [])
+
+    # 2) normalize + citations
+    ctx_hits  = _normalize_hits(raw_hits)
+    citations = _collect_citations(ctx_hits)
+
+    # 3) build messages with actual snippet text
+    messages = build_messages(req.question, ctx_hits)
+
+    # 4) call vLLM (OpenAI-compatible)
+    temperature = max(0.0, min(req.temperature, 0.5))
+    max_tokens  = min(req.max_tokens, 256)
+    payload = {
+        &quot;model&quot;: MODEL_NAME,
+        &quot;messages&quot;: messages,
+        &quot;temperature&quot;: temperature,
+        &quot;top_p&quot;: 0.9,
+        &quot;max_tokens&quot;: max_tokens,
+        &quot;stream&quot;: False,
+    }
+    with httpx.Client(timeout=120) as cx:
+        rr = cx.post(f&quot;{VLLM_URL}/v1/chat/completions&quot;, json=payload)
+        rr.raise_for_status()
+        data = rr.json()
+
+    content = data[&quot;choices&quot;][0][&quot;message&quot;][&quot;content&quot;]
+    usage   = data.get(&quot;usage&quot;, {})
+    dt      = time.time() - t0
+
+    content = _strip_existing_source(content)
+    content = content + (&quot;\nSource: &quot; + &quot;; &quot;.join(citations) if citations else &quot;\nSource: (none)&quot;)
+
+    resp = {
+        &quot;answer&quot;: content,
+        &quot;citations&quot;: citations,
+        &quot;latency_seconds&quot;: round(dt, 3),
+        &quot;usage&quot;: usage,
+    }
+
+    # 5) optional debug payload so you can inspect exactly what was sent
+    if req.debug:
+        used_snippets = []
+        for h in ctx_hits:
+            meta = h.get(&quot;meta&quot;) or {}
+            used_snippets.append({
+                &quot;label&quot;: _label(meta),
+                &quot;text&quot;: h.get(&quot;text&quot;) or meta.get(&quot;text&quot;) or &quot;&quot;
+            })
+        resp[&quot;debug&quot;] = {
+            &quot;messages&quot;: messages,         # exact system+user messages sent
+            &quot;used_snippets&quot;: used_snippets,
+            &quot;raw_hits&quot;: raw_hits[:10],    # original retriever output (trimmed)
+            &quot;payload_model&quot;: MODEL_NAME,
+            &quot;payload_temperature&quot;: temperature,
+            &quot;payload_max_tokens&quot;: max_tokens,
+        }
+
+    return resp
+</code></pre>
+<hr />
+<h2 id="3-k8s-manifests-for-chat-api">3) K8s manifests for Chat API</h2>
+<h3 id="k8s40-servecm-chat-apiyaml"><code>k8s/40-serve/cm-chat-api.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-api-config
+  namespace: atharva-app
+data:
+  RETRIEVER_URL: &quot;http://atharva-retriever.atharva-ml.svc.cluster.local:8001&quot;
+  VLLM_URL: &quot;http://atharva-vllm.atharva-ml.svc.cluster.local:8000&quot;
+  MODEL_NAME: &quot;smollm2-135m-atharva&quot;
+</code></pre>
+<h3 id="k8s40-servedeploy-chat-apiyaml"><code>k8s/40-serve/deploy-chat-api.yaml</code></h3>
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atharva-chat-api
+  namespace: atharva-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: atharva-chat-api }
+  template:
+    metadata:
+      labels: { app: atharva-chat-api }
+    spec:
+      containers:
+      - name: api
+        image: python:3.11-slim
+        workingDir: /workspace
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            pip install --no-cache-dir fastapi==0.112.2 uvicorn==0.30.6 httpx==0.27.2
+            uvicorn chat_api:app --host 0.0.0.0 --port 8080 --proxy-headers
+        envFrom:
+        - configMapRef: { name: chat-api-config }
+        volumeMounts:
+        - name: host
+          mountPath: /workspace
+          subPath: atharva-dental-assistant/serving
+        ports: [{ containerPort: 8080 }]
+        readinessProbe:
+          httpGet: { path: /health, port: 8080 }
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: host
+        hostPath: { path: /mnt/project, type: Directory }
+</code></pre>
+<h3 id="k8s40-servesvc-chat-apiyaml"><code>k8s/40-serve/svc-chat-api.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: atharva-chat-api
+  namespace: atharva-app
+spec:
+  type: NodePort
+  selector: { app: atharva-chat-api }
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30300
+</code></pre>
+<p><em>(Optional)</em> You can add an <strong>Ingress</strong> later; for local dev we’ll use <code>NodePort</code>.</p>
+<hr />
+<h2 id="4-helper-scripts">4) Helper scripts</h2>
+<h3 id="scriptsdeploy_vllmsh"><code>scripts/deploy_vllm.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/40-serve/rawdeployment-vllm.yaml
+kubectl apply -f k8s/40-serve/svc-vllm.yaml
+echo &quot;Waiting for vLLM Service endpoints...&quot;
+kubectl -n atharva-ml rollout status deploy/atharva-vllm-predictor --timeout=300s || true
+kubectl -n atharva-ml get pods -l app=vllm -o wide
+kubectl -n atharva-ml get svc atharva-vllm
+</code></pre>
+<blockquote>
+<p>If the <code>rollout status</code> line errors (RawDeployment creates the Deployment; sometimes the generated name differs), don’t worry—check pods with the label <code>app=vllm</code>. If your cluster / KServe version behaves differently, just <code>kubectl -n atharva-ml get deploy,pod</code> to see the actual names.</p>
+</blockquote>
+<h3 id="scriptsdeploy_chat_apish"><code>scripts/deploy_chat_api.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/40-serve/cm-chat-api.yaml
+kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+kubectl apply -f k8s/40-serve/svc-chat-api.yaml
+kubectl -n atharva-app rollout status deploy/atharva-chat-api --timeout=180s
+kubectl -n atharva-app get svc atharva-chat-api
+</code></pre>
+<h3 id="scriptssmoke_e2esh"><code>scripts/smoke_e2e.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+CHAT_HOST=&quot;${CHAT_HOST:-127.0.0.1}&quot;
+CHAT_PORT=&quot;${CHAT_PORT:-30300}&quot;
+VLLM_HOST=&quot;${VLLM_HOST:-127.0.0.1}&quot;
+VLLM_PORT=&quot;${VLLM_PORT:-30200}&quot;
+
+chat_url=&quot;http://${CHAT_HOST}:${CHAT_PORT}&quot;
+vllm_url=&quot;http://${VLLM_HOST}:${VLLM_PORT}&quot;
+
+echo &quot;=== End-to-End Test: Chat API -&gt; Retriever -&gt; vLLM ===&quot;
+echo &quot;Chat API: ${chat_url}    vLLM: ${vllm_url}&quot;
+echo
+
+# 1) Health checks
+echo &quot;[1/4] Health: Chat API&quot;
+curl -sf &quot;${chat_url}/health&quot; | jq . || { echo &quot;Chat API health failed&quot;; exit 1; }
+echo
+
+echo &quot;[2/4] Health: vLLM (OpenAI models)&quot;
+curl -sf &quot;${vllm_url}/v1/models&quot; | jq '.data[0] // {}' || { echo &quot;vLLM models failed&quot;; exit 1; }
+echo
+
+# 2) Helper to run a chat and extract key fields
+ask() {
+  local q=&quot;$1&quot;; local k=&quot;${2:-4}&quot;; local max_tokens=&quot;${3:-256}&quot;; local temp=&quot;${4:-0.3}&quot;
+  echo &quot;Q: $q&quot;
+  resp=&quot;$(curl -s -X POST &quot;${chat_url}/chat&quot; \
+    -H 'content-type: application/json' \
+    -d &quot;{\&quot;question\&quot;:\&quot;${q}\&quot;,\&quot;k\&quot;:${k},\&quot;max_tokens\&quot;:${max_tokens},\&quot;temperature\&quot;:${temp}}&quot;)&quot;
+
+  # Pretty summary
+  echo &quot;$resp&quot; | jq -r '
+    . as $r |
+    &quot;─ Answer ─\n&quot; +
+    ($r.answer // &quot;&lt;no answer&gt;&quot;) + &quot;\n\n&quot; +
+    &quot;─ Citations ─\n&quot; + ((($r.citations // [])|join(&quot;\n&quot;)) // &quot;&lt;none&gt;&quot;) + &quot;\n\n&quot; +
+    &quot;─ Stats ─\n&quot; +
+    (&quot;latency_seconds: &quot; + (($r.latency_seconds // 0)|tostring)) + &quot;\n&quot; +
+    (&quot;prompt_tokens: &quot;   + (($r.usage.prompt_tokens // 0)|tostring)) + &quot;\n&quot; +
+    (&quot;completion_tokens:&quot; + (($r.usage.completion_tokens // 0)|tostring)) + &quot;\n&quot;
+  '
+  echo &quot;-------------------------------------------&quot;
+}
+
+echo &quot;[3/4] Functional E2E prompts&quot;
+ask &quot;Are you open on Sundays ?&quot;
+ask &quot;How long does scaling take and what aftercare is needed?&quot;
+ask &quot;What is the typical cost range for a root canal and crown?&quot; 4 256 0.2
+ask &quot;My face is badly swollen and I have a high fever after an extraction. What should I do?&quot; 4 192 0.1
+
+# 3) Optional: short latency/tokens smoke loop
+echo
+echo &quot;[4/4] Throughput smoke (3 quick runs)&quot;
+for i in 1 2 3; do
+  curl -s -X POST &quot;${chat_url}/chat&quot; \
+    -H 'content-type: application/json' \
+    -d '{&quot;question&quot;:&quot;Is next-day pain after RCT normal? Suggest aftercare.&quot;,&quot;k&quot;:3,&quot;max_tokens&quot;:192}' \
+    | jq -r '&quot;run=\($i) lat=\(.latency_seconds)s tokens=(p:\(.usage.prompt_tokens // 0), c:\(.usage.completion_tokens // 0))&quot;' --arg i &quot;$i&quot;
+done
+
+echo
+echo &quot;✅ E2E complete.&quot;
+</code></pre>
+<hr />
+<h2 id="5-install-kserve">5) Install Kserve</h2>
+<p>Install and validate kserve using </p>
+<pre><code>
+# Setup Cert Manager 
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.0/cert-manager.yaml
+
+# Validate cert-manager components are running. 
+kubectl get pods -n cert-manager -w
+
+# wait till cert-manager pods are up
+
+# Install Kserver CRDs
+helm install kserve-crd oci://ghcr.io/kserve/charts/kserve-crd --version v0.15.2 --namespace kserve --create-namespace
+
+# Validate CRDs are deployed 
+helm list -A
+
+# Install Kserver 
+helm install kserve oci://ghcr.io/kserve/charts/kserve --version v0.15.2 \
+  --namespace kserve \
+  --set kserve.controller.deploymentMode=RawDeployment
+
+# Validate kserver is deployed 
+helm list -A
+
+kubectl wait --for=condition=Available -n kserve deploy/kserve-controller-manager --timeout=300s
+
+kubectl get pods -n kserve
+
+</code></pre>
+<hr />
+<h2 id="5-run-the-lab">5) Run the lab</h2>
+<p>From repo root:</p>
+<pre><code># 1) Deploy vLLM (KServe RawDeployment) that mounts the model via ImageVolume
+bash scripts/deploy_vllm.sh
+
+# 2) Deploy the Chat API (RAG → prompt → vLLM)
+bash scripts/deploy_chat_api.sh
+
+# 3) End-to-end smoke test
+bash scripts/smoke_e2e.sh
+</code></pre>
+<h3 id="quick-local-validation">Quick local validation</h3>
+<h3 id="1-model-list">1) Model list</h3>
+<pre><code>curl -s http://127.0.0.1:30200/v1/models | jq .
+</code></pre>
+<h3 id="2-simple-chat-completion">2) Simple chat completion</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
+        &quot;max_tokens&quot;: 32,
+        &quot;temperature&quot;: 0.2
+      }' | jq .
+</code></pre>
+<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
+        &quot;max_tokens&quot;: 32,
+        &quot;temperature&quot;: 0.2
+      }' | jq .
+</code></pre>
+<h3 id="3-legacy-completions-optional">3) Legacy completions (optional)</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
+        &quot;prompt&quot;:&quot;Write a haiku about dentists:&quot;,
+        &quot;max_tokens&quot;: 40
+      }' | jq .
+</code></pre>
+<h3 id="4-chat-api">4) chat API</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:30300/chat -H &quot;content-type: application/json&quot; \
+  -d '{&quot;question&quot;:&quot;Are you open on Sundays?&quot;,&quot;k&quot;:4}' | jq .
+
+curl -s -X POST http://127.0.0.1:30300/chat -H &quot;content-type: application/json&quot; \
+  -d '{&quot;question&quot;:&quot;Whats the price range for Root Canal Therapy?&quot;,&quot;k&quot;:4}' | jq .
+
+</code></pre>
+<h3 id="5-to-see-whats-being-sent-to-the-llm">5) To see whats being sent to the LLM</h3>
+<pre><code>curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/json' \\n  -d '{&quot;question&quot;:&quot;How long does scaling take and what aftercare is needed?&quot;,&quot;k&quot;:4,&quot;debug&quot;:true}' \\n  | jq -r '.debug.messages[0].content'
+
+curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/json' \\n  -d '{&quot;question&quot;:&quot;Whats the price range for Root Canal Therapy?&quot;,&quot;k&quot;:4,&quot;debug&quot;:true}' \\n  | jq -r '.debug.messages[0].content'
+
+</code></pre>
+<blockquote>
+<p>Expect answers in Atharva’s <strong>concise, safety-minded</strong> style with a trailing <strong><code>Source:</code></strong> line and citations like <code>treatments.json#TX-RCT-01</code>.</p>
+</blockquote>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Served your <strong>fine-tuned SmolLM2-135M</strong> using <strong>vLLM</strong> with model weights mounted from an <strong>ImageVolume</strong>.</p>
+</li>
+<li>
+<p>Exposed vLLM via a <strong>Service</strong> and wired a <strong>Chat API</strong> that performs <strong>RAG → prompt → LLM</strong>.</p>
+</li>
+<li>
+<p>Verified end-to-end responses and citations.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab03/" class="btn btn-neutral float-left" title="Lab 03 - Packaging Model as OCI Image"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../lab05/" class="btn btn-neutral float-right" title="Lab 05 - LLM Observability with Prometheus">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab03/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../lab05/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

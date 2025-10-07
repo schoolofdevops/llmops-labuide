@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://kubernetes-tutorial.schoolofdevops.com/lab07/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 07 - GitOps for GenAI with ArgoCD - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 07 - GitOps for GenAI with ArgoCD";
+        var mkdocs_page_input_path = "lab07.md";
+        var mkdocs_page_url = "/lab07/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 07 - GitOps for GenAI with ArgoCD</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#goal">Goal</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#0-repo-layout-gitops-view">0) Repo layout (GitOps view)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-install-argocd">1) Install ArgoCD</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-argocd-project-optional-but-tidy">2) ArgoCD Project (optional but tidy)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-app-of-apps-the-root-application">3) App-of-Apps (the “root” Application)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-child-applications-one-per-stack">4) Child Applications (one per stack)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#app-observabilityyaml-wave-0">app-observability.yaml (wave 0)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#app-serveyaml-wave-1">app-serve.yaml (wave 1)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#app-autoscaleyaml-wave-2">app-autoscale.yaml (wave 2)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-register-the-git-repo-cli-alternative">5) Register the Git repo (CLI alternative)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-sync">6) Sync</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-model-promotion-git-change-rollout">7) Model promotion (Git change → rollout)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-optional-app-of-apps-stagingprod">8) (Optional) App-of-Apps + Staging/Prod</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#9-optional-argo-cd-image-updater">9) (Optional) Argo CD Image Updater</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#10-quick-commands-cheat-sheet">10) Quick commands cheat-sheet</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#lab-summary">Lab Summary</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 07 - GitOps for GenAI with ArgoCD</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab07.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-7-gitops-with-argocd">Lab 7 — GitOps with ArgoCD</h1>
+<h2 id="goal">Goal</h2>
+<ul>
+<li>
+<p>Run ArgoCD in-cluster.</p>
+</li>
+<li>
+<p>Manage all Atharva components as <strong>declarative Applications</strong> driven from Git.</p>
+</li>
+<li>
+<p>Order deploys via <strong>sync waves</strong>.</p>
+</li>
+<li>
+<p>Promote models by editing <strong>one line</strong> (ImageVolume <code>reference:</code> tag) and letting Argo roll it out.</p>
+</li>
+<li>
+<p>Roll back with a Git revert.</p>
+</li>
+</ul>
+<blockquote>
+<p>Assumptions</p>
+</blockquote>
+<ul>
+<li>
+<p>Your repo is at <code>https://github.com/&lt;you&gt;/atharva-dental-assistant.git</code> (replace everywhere below).</p>
+</li>
+<li>
+<p>Labs 1–6 manifests already live under <code>atharva-dental-assistant/k8s/**</code>.</p>
+</li>
+</ul>
+<hr />
+<h2 id="0-repo-layout-gitops-view">0) Repo layout (GitOps view)</h2>
+<p>Add this under <code>k8s/70-gitops/</code>:</p>
+<pre><code>k8s/
+  70-gitops/
+    app-of-apps.yaml           # the “root” Application
+    projects/
+      atharva-project.yaml     # (optional) ArgoCD project
+    apps/
+      app-data.yaml            # data synth + FAISS index jobs (Lab 1)
+      app-train.yaml           # LoRA train + merge (Lab 2)
+      app-model.yaml           # model mount check (Lab 3) or future registry checks
+      app-serve.yaml           # retriever + vLLM + chat API (Labs 1 &amp; 4)
+      app-observability.yaml   # SMs, alerts, grafana dashboard (Lab 5)
+      app-autoscale.yaml       # HPA/VPA/KEDA (Lab 6)
+</code></pre>
+<p>Each Application points at an existing <strong>path</strong> in your repo. No refactor required.</p>
+<pre><code>cd project/atharva-dental-assistant
+mkdir k8s/70-gitops
+mkdir k8s/70-gitops/projects
+mkdir k8s/70-gitops/apps
+touch .gitignore
+</code></pre>
+<p>Also prepare your repo to be revision controlled so that you could deploy using GitOps. </p>
+<p>Add <code>.gitignore</code> file to atharva-dental-assistant</p>
+<pre><code># ============================
+# Python
+# ============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.orig
+*.log
+*.tmp
+*.swp
+.env
+.venv
+venv/
+env/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ============================
+# Datasets &amp; Artifacts
+# ============================
+artifacts/
+datasets/training/*
+!datasets/clinic/**
+
+# Keep clinic dataset (source knowledge)
+# Ignore training data (sensitive or large)
+
+# ============================
+# Model Checkpoints / Outputs
+# ============================
+*.ckpt
+*.pt
+*.bin
+*.onnx
+*.safetensors
+*.h5
+*.tar.gz
+*.zip
+*.npz
+
+# ============================
+# Jupyter &amp; Dev Artifacts
+# ============================
+.ipynb_checkpoints/
+*.ipynb~
+*.DS_Store
+*.idea/
+.vscode/
+*.code-workspace
+
+# ============================
+# Kubernetes &amp; Deployment Junk
+# ============================
+# Ignore backups or temp yaml files
+k8s/**/*.orig
+k8s/**/*.bak
+k8s/**/*.tmp
+# Keep main manifests
+!k8s/**/*.yaml
+
+# ============================
+# Logs &amp; Results
+# ============================
+logs/
+*.log
+*.out
+*.err
+nohup.out
+results/
+outputs/
+
+# ============================
+# Temporary Scripts &amp; Cache
+# ============================
+tmp/
+.cache/
+.tox/
+pytest_cache/
+__snapshots__/
+.coverage
+coverage.xml
+htmlcov/
+
+# ============================
+# Local Configs &amp; Misc
+# ============================
+*.local
+*.env
+.envrc
+.env.*
+*.cfg
+*.ini
+*.toml
+*.jsonl.backup
+
+# ============================
+# OS / Editor
+# ============================
+.DS_Store
+Thumbs.db
+.swp
+*.bak
+*.tmp
+</code></pre>
+<p>Create a new repo <a href="https://github.com/new">https://github.com/new</a> </p>
+<p>e.g.  <code>xxxxxx/atharva-dental-assistant</code>
+<img alt="" src="Screenshot%202025-10-06%20at%202.18.06%E2%80%AFPM.png" /></p>
+<p>Initialise the local repo and prepate to push the changes </p>
+<pre><code># make sure you are in the right path
+cd project/atharva-dental-assistant
+
+git init
+git add * 
+git commit -am &quot;importing llmops code&quot;
+
+# Replace xxxxxx with your github id
+git remote add origin https://github.com/xxxxxx/atharva-dental-assistant.git
+
+git push -u origin main
+</code></pre>
+<hr />
+<h2 id="1-install-argocd">1) Install ArgoCD</h2>
+<p>Create namespace &amp; install:</p>
+<pre><code>kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+
+# scale down optional components
+kubectl -n argocd scale deploy argocd-dex-server argocd-notifications-controller argocd-redis argocd-applicationset-controller --replicas=0
+
+# Wait &amp; get admin password
+kubectl -n argocd rollout status deploy/argocd-server --timeout=300s || true
+kubectl -n argocd get pods
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+
+# Patch and expose ArgoCD sevice on port 32100
+kubectl patch svc argocd-server -n argocd --patch \
+  '{&quot;spec&quot;: { &quot;type&quot;: &quot;NodePort&quot;, &quot;ports&quot;: [ { &quot;nodePort&quot;: 32100, &quot;port&quot;: 443, &quot;protocol&quot;: &quot;TCP&quot;, &quot;targetPort&quot;: 8080 } ] } }'
+
+kubectl get svc -n argocd
+</code></pre>
+<p>Login by visiting http://localhost:32100</p>
+<p>Login in another shell:</p>
+<pre><code>argocd login 127.0.0.1:32100 --username admin --password &lt;printed-password&gt; --insecure
+</code></pre>
+<blockquote>
+<p>If you don’t have the <code>argocd</code> CLI, you can do everything from the UI.</p>
+</blockquote>
+<hr />
+<h2 id="2-argocd-project-optional-but-tidy">2) ArgoCD Project (optional but tidy)</h2>
+<p><code>k8s/70-gitops/projects/atharva-project.yaml</code></p>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: atharva
+  namespace: argocd
+spec:
+  description: Atharva Dental Clinic - LLMOps Bootcamp
+  sourceRepos:
+    - https://github.com/xxxxxx/atharva-dental-assistant.git
+  destinations:
+    - namespace: atharva-ml
+      server: https://kubernetes.default.svc
+    - namespace: atharva-app
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+    - namespace: keda
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+</code></pre>
+<p>Ensure you replace <code>xxxxxx</code> with the actual Git Repository </p>
+<p>Apply:</p>
+<pre><code>kubectl apply -f k8s/70-gitops/projects/atharva-project.yaml
+</code></pre>
+<hr />
+<h2 id="3-app-of-apps-the-root-application">3) App-of-Apps (the “root” Application)</h2>
+<p><code>k8s/70-gitops/app-of-apps.yaml</code></p>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atharva-root
+  namespace: argocd
+spec:
+  project: atharva
+  source:
+    repoURL: https://github.com/xxxxxx/atharva-dental-assistant.git
+    targetRevision: main
+    path: k8s/70-gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+</code></pre>
+<p>Ensure you replace <code>xxxxxx</code> with the actual Git Repository </p>
+<p>Apply:</p>
+<pre><code>kubectl apply -f k8s/70-gitops/app-of-apps.yaml
+</code></pre>
+<hr />
+<h2 id="4-child-applications-one-per-stack">4) Child Applications (one per stack)</h2>
+<blockquote>
+<p>We’ll sequence with <strong>sync-waves</strong> so infra comes first, then serving, then autoscaling:</p>
+</blockquote>
+<ul>
+<li>
+<p>Wave 0: <strong>observability</strong> (Prometheus already installed in Lab 0; this just adds SMs &amp; dashboards)</p>
+</li>
+<li>
+<p>Wave 1: <strong>data</strong> (jobs), <strong>train</strong> (jobs), <strong>model</strong> (image-volume smoke)</p>
+</li>
+<li>
+<p>Wave 2: <strong>serve</strong> (retriever, vLLM, chat API)</p>
+</li>
+<li>
+<p>Wave 3: <strong>autoscale</strong> (HPA/VPA/KEDA)</p>
+</li>
+</ul>
+<p>Create files in <code>k8s/70-gitops/apps/</code>:</p>
+<pre><code>cd k8s/70-gitops/apps/
+</code></pre>
+<h3 id="app-observabilityyaml-wave-0"><code>app-observability.yaml</code> (wave 0)</h3>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atharva-observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: &quot;0&quot;
+spec:
+  project: atharva
+  source:
+    repoURL: https://github.com/xxxxxx/atharva-dental-assistant.git
+    targetRevision: main
+    path: k8s/50-observability
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+</code></pre>
+<p>Ensure you replace <code>xxxxxx</code> with the actual Git Repository </p>
+<h3 id="app-serveyaml-wave-1"><code>app-serve.yaml</code> (wave 1)</h3>
+<p>Points at Lab 4 (vLLM RawDeployment + svc, chat API, cm).
+Includes <strong>ignoreDifferences</strong> for KServe’s generated fields (if needed) and a health timeout.</p>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atharva-serve
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: &quot;1&quot;
+spec:
+  project: atharva
+  source:
+    repoURL: https://github.com/xxxxxx/atharva-dental-assistant.git
+    targetRevision: main
+    path: k8s/40-serve
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: atharva-ml
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+  ignoreDifferences:
+    - group: serving.kserve.io
+      kind: RawDeployment
+      jsonPointers:
+        - /spec/deployments/0/replicas    # controller may reconcile
+  syncOptions:
+    - Validate=true
+    - PrunePropagationPolicy=background
+  revisionHistoryLimit: 5
+</code></pre>
+<p>Ensure you replace <code>xxxxxx</code> with the actual Git Repository </p>
+<blockquote>
+<p>If your Chat API manifests live in <code>atharva-app</code>, keep them in <code>k8s/40-serve/</code>—Argo will create resources in their native namespaces. (Your YAML already sets the namespace for each object.)</p>
+</blockquote>
+<h3 id="app-autoscaleyaml-wave-2"><code>app-autoscale.yaml</code> (wave 2)</h3>
+<p>Points at Lab 6 (HPA/VPA/KEDA + loadgen).</p>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atharva-autoscale
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: &quot;2&quot;
+spec:
+  project: atharva
+  source:
+    repoURL: https://github.com/xxxxxx/atharva-dental-assistant.git
+    targetRevision: main
+    path: k8s/60-autoscale
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: atharva-app
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+</code></pre>
+<p>Ensure you replace <code>xxxxxx</code> with the actual Git Repository </p>
+<p>In case if you want to bulk replace <code>xxxxxx</code> with your userid do this </p>
+<pre><code>sed -i '' 's/xxxxxx/yourid/g' *.yaml
+</code></pre>
+<p>where <code>yourid</code> is what you are replacing the placeholders with </p>
+<p>Also create kustomization spec at <code>k8s/60-autoscale/kustomization.yaml</code> to apply selective manifests </p>
+<pre><code>apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - vpa-retriever.yaml
+  - vpa-vllm.yaml
+  - keda-scaledobject-chat.yaml
+</code></pre>
+<p>Commit &amp; push these files.</p>
+<pre><code># run this from atharva-dental-assistant path
+git add k8s/*
+git status
+git commit -m &quot;adding argocd app spec&quot;
+git push -u origin main
+</code></pre>
+<hr />
+<h2 id="5-register-the-git-repo-cli-alternative">5) Register the Git repo (CLI alternative)</h2>
+<p>If your repo is <strong>private</strong>, add credentials:</p>
+<pre><code>argocd repo add https://github.com/&lt;you&gt;/atharva-dental-assistant.git \
+  --username &lt;user&gt; --password &lt;token&gt; --insecure-ignore-host-key
+</code></pre>
+<p>If <strong>public</strong>, no action needed.</p>
+<hr />
+<h2 id="6-sync">6) Sync</h2>
+<p>From CLI:</p>
+<pre><code>argocd app sync atharva-root
+argocd app list
+</code></pre>
+<p>Or click <strong>Sync</strong> in Argo UI for <code>atharva-root</code>.
+Argo will create child Applications in wave order, then deploy resources from each path.</p>
+<hr />
+<h2 id="7-model-promotion-git-change-rollout">7) Model promotion (Git change → rollout)</h2>
+<p>The <strong>one-line</strong> you change to promote a model is the <strong>ImageVolume reference</strong> in <code>k8s/40-serve/rawdeployment-vllm.yaml</code>:</p>
+<pre><code>volumes:
+- name: model
+  image:
+    reference: kind-registry:5001/atharva/smollm2-135m-merged:v2   # &lt;— change tag v1 → v2
+    pullPolicy: IfNotPresent
+</code></pre>
+<p><strong>Flow</strong></p>
+<ol>
+<li>
+<p>Build &amp; push your new model image (Lab 3 scripts), e.g. <code>:v2</code>.</p>
+</li>
+<li>
+<p>Edit the <code>reference:</code> tag to <code>:v2</code>, commit &amp; push to <code>main</code>.</p>
+</li>
+<li>
+<p>ArgoCD detects the diff, syncs, and the <strong>vLLM</strong> pod rolls to the new mounted model.</p>
+</li>
+<li>
+<p>Validate with your Lab 4 smoke test.</p>
+</li>
+<li>
+<p><strong>Rollback</strong>: <code>git revert</code> that commit (or change back to <code>:v1</code>) → Argo rolls back.</p>
+</li>
+</ol>
+<p>⠀</p>
+<blockquote>
+<p>Bonus: add a <strong>PreSync hook</strong> job in <code>k8s/30-model/</code> to <strong>cosign verify</strong> the model image before serving. If verify fails, sync fails.</p>
+</blockquote>
+<hr />
+<h2 id="8-optional-app-of-apps-stagingprod">8) (Optional) App-of-Apps + Staging/Prod</h2>
+<p>Create two roots: <code>atharva-root-staging</code> and <code>atharva-root-prod</code>, each pointing at a different branch (<code>staging</code>, <code>main</code>).
+Promotion becomes a <strong>PR/merge</strong> from staging → main. The only change needed for a model rollout is still that <strong>one tag</strong>.</p>
+<hr />
+<h2 id="9-optional-argo-cd-image-updater">9) (Optional) Argo CD Image Updater</h2>
+<p>If you’d like automatic bumping when a new tag appears in the registry:</p>
+<ul>
+<li>
+<p>Install <strong>argocd-image-updater</strong>.</p>
+</li>
+<li>
+<p>Annotate <code>app-serve.yaml</code> with tracking rules for <code>kind-registry:5001/atharva/smollm2-135m-merged</code>.</p>
+</li>
+<li>
+<p>It will open PRs or auto-commit tag bumps to your Git repo.</p>
+</li>
+</ul>
+<p>(Keep manual edits for the bootcamp exercises first.)</p>
+<hr />
+<h2 id="10-quick-commands-cheat-sheet">10) Quick commands cheat-sheet</h2>
+<pre><code>
+# List applications
+argocd app list
+
+# Sync root
+argocd app sync atharva-root
+
+# See app tree
+argocd app get atharva-root
+
+# Rollback a child app to a past revision (if needed)
+argocd app history atharva-serve
+argocd app rollback atharva-serve &lt;ID&gt;
+</code></pre>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Stood up <strong>ArgoCD</strong> and declared an <strong>App-of-Apps</strong> hierarchy.</p>
+</li>
+<li>
+<p>Put <strong>every lab stack under GitOps</strong> with clear sequencing.</p>
+</li>
+<li>
+<p>Practiced a <strong>model promotion</strong> by changing the <strong>ImageVolume tag</strong> in Git.</p>
+</li>
+<li>
+<p>Learned how to <strong>rollback</strong> using Git/Argo history.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab06/" class="btn btn-neutral float-left" title="Lab 06 - Autoscaling vLLM + RAG + Chat API"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab06/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
