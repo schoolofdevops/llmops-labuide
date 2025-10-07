@@ -1,0 +1,31 @@
+site_name: LLMOps with Kubernetes
+site_url: http://kubernetes-tutorial.schoolofdevops.com/
+site_author: Gourav Shah
+site_description: LLMOps / GenAIOps with Kubernetes, Kubeflow, Kserve, GitOps
+google_analytics: ['', 'llmops-tutorial.schoolofdevops.com']
+nav:
+  - Home: "index.md"
+  - Docker Essentials for Kubernetes:
+     - Lab 00 - Setup: "lab00.md"
+     - Lab 01 - Building RAG system: "lab01.md"
+     - Lab 02 - Fine-tuning a Model with LoRA: "lab02.md"
+     - Lab 03 - Packaging Model as OCI Image: "lab03.md"
+     - Lab 04 - Serving with Kserve and vLLM: "lab04.md"
+     - Lab 05 - LLM Observability with Prometheus: "lab05.md"
+     - Lab 06 - Autoscaling vLLM + RAG + Chat API: "lab06.md"
+     - Lab 07 - GitOps for GenAI with ArgoCD: "lab07.md"
+docs_dir: docs
+theme: readthedocs
+plugins:
+    - search
+repo_url: https://github.com/schoolofdevops/llmops-labguide
+edit_uri: edit/master/docs
+copyright: Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA
+extra:
+  social:
+    - type: 'github'
+      link: 'https://github.com/schoolofdevops'
+    - type: 'twitter'
+      link: 'https://twitter.com/gouravhah'
+    - type: 'linkedin'
+      link: 'https://www.linkedin.com/in/gouravshah'
