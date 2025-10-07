@@ -5,8 +5,8 @@ site_description: LLMOps / GenAIOps with Kubernetes, Kubeflow, Kserve, GitOps
 google_analytics: ['', 'llmops-tutorial.schoolofdevops.com']
 nav:
   - Home: "index.md"
-  - Docker Essentials for Kubernetes:
-     - Lab 00 - Setup: "lab00.md"
+  - Kubernetes for GenAI/LLMOps:
+     - Lab 00 - Setting up Kubernetes Environment: "lab00.md"
      - Lab 01 - Building RAG system: "lab01.md"
      - Lab 02 - Fine-tuning a Model with LoRA: "lab02.md"
      - Lab 03 - Packaging Model as OCI Image: "lab03.md"
