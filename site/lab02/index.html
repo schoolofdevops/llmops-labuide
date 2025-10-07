@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://llmops-tutorial.schoolofdevops.com/lab02/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 02 - Fine-tuning a Model with LoRA - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 02 - Fine-tuning a Model with LoRA";
+        var mkdocs_page_input_path = "lab02.md";
+        var mkdocs_page_url = "/lab02/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 02 - Fine-tuning a Model with LoRA</a>
+    <ul class="current">
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab08/">Lab 08 - Automating LLM pipelines with Argo Workflows</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 02 - Fine-tuning a Model with LoRA</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab02.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-2-cpu-lora-fine-tuning-smollm2-135m">Lab 2: CPU LoRA fine-tuning (SmolLM2-135M)</h1>
+<p>Amazing—here’s <strong>Lab 2: CPU LoRA fine-tuning (SmolLM2-135M)</strong>, ready to drop into your repo and run on the KIND cluster from Lab 0.</p>
+<p>This lab:</p>
+<ul>
+<li>
+<p>fine-tunes <strong>HuggingFaceTB/SmolLM2-135M-Instruct</strong> on <strong>CPU</strong> with <strong>PEFT LoRA</strong>, using the synthetic chat JSONL you generated in Lab 1,</p>
+</li>
+<li>
+<p>saves <strong>LoRA adapters</strong> + checkpoints under <code>artifacts/train/&lt;run-id&gt;/</code>,</p>
+</li>
+<li>
+<p><strong>merges</strong> the LoRA into base weights for serving,</p>
+</li>
+<li>
+<p>produces a <strong>Transformers-style model folder</strong>, and a <strong>tarball</strong> you’ll later wrap into an OCI image for ImageVolumes.</p>
+</li>
+</ul>
+<hr />
+<h1 id="files-added-in-this-lab">📁 Files added in this lab</h1>
+<pre><code>atharva-dental-assistant/
+├─ training/
+│  ├─ Dockerfile
+│  ├─ train_lora.py
+│  ├─ merge_lora.py
+│  └─ prompt_utils.py
+├─ k8s/
+│  └─ 20-train/
+│     ├─ job-train-lora.yaml
+│     └─ job-merge-model.yaml
+└─ scripts/
+   ├─ train_lora.sh
+   └─ merge_model.sh
+</code></pre>
+<blockquote>
+<p>Assumes your repo still lives under <code>./project/atharva-dental-assistant</code> on the host (mounted into nodes at <code>/mnt/project/atharva-dental-assistant</code> per Lab 0).</p>
+</blockquote>
+<hr />
+<pre><code># make sure you are in the right project path 
+project/atharva-dental-assistant
+
+# create directories you would need as part of this lab
+mkdir training k8s/20-train
+</code></pre>
+<h2 id="trainingdockerfile">training/Dockerfile</h2>
+<p>CPU-only image with pinned libs. (No CUDA; uses PyTorch CPU wheel.)</p>
+<p>File : <code>training/Dockerfile</code></p>
+<pre><code>#training/Dockerfile
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends \
+    git curl ca-certificates build-essential &amp;&amp; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install CPU PyTorch + Transformers/PEFT/Datasets/Accelerate
+RUN pip install --no-cache-dir &quot;torch==2.3.1&quot; \
+    &quot;transformers==4.43.3&quot; &quot;peft==0.12.0&quot; &quot;datasets==2.20.0&quot; \
+    &quot;accelerate==0.33.0&quot; &quot;tqdm==4.66.5&quot; &quot;bitsandbytes==0.43.1&quot; \
+    &quot;sentencepiece==0.2.0&quot; &quot;numpy==1.26.4&quot; &quot;pydantic==2.8.2&quot;
+
+WORKDIR /workspace
+COPY training/train_lora.py training/merge_lora.py training/prompt_utils.py /workspace/
+</code></pre>
+<blockquote>
+<p><code>bitsandbytes</code> is optional; it will no-op on CPU (kept for parity if you demonstrate QLoRA later).</p>
+</blockquote>
+<hr />
+<h2 id="trainingprompt_utilspy">training/prompt_utils.py</h2>
+<p>Utilities to turn our <code>messages</code> (from JSONL) into tokenizable text.
+We try <code>tokenizer.apply_chat_template</code> (preferred) and fallback to a simple template.</p>
+<pre><code># training/prompt_utils.py
+from typing import List, Dict
+
+DEFAULT_SYSTEM = (
+    &quot;You are Atharva Dental Clinic assistant in Pune, India (INR). &quot;
+    &quot;Always use INR (₹) as a currency for prices and cost ranges, &quot;
+    &quot;Be concise, safety-minded, ask follow-ups if info is missing, &quot;
+    &quot;Consider the context provided and derive answered based on that, &quot;
+    &quot;and always include a final 'Source:' line citing file#section.&quot;
+)
+
+def to_chat(messages: List[Dict], default_system: str = DEFAULT_SYSTEM):
+    &quot;&quot;&quot;
+    Ensure we have system→user→assistant message order for a single-turn sample.
+    Our dataset already stores messages with roles. We enforce one assistant turn.
+    &quot;&quot;&quot;
+    sys_seen = any(m[&quot;role&quot;] == &quot;system&quot; for m in messages)
+    msgs = []
+    if not sys_seen:
+        msgs.append({&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: default_system})
+    msgs.extend(messages)
+    # Basic guard: keep only first assistant answer for label masking
+    out, assistant_added = [], False
+    for m in msgs:
+        if m[&quot;role&quot;] == &quot;assistant&quot;:
+            if assistant_added:  # drop extra assistant turns for simplicity
+                continue
+            assistant_added = True
+        out.append(m)
+    return out
+
+def simple_template(messages: List[Dict]) -&gt; str:
+    &quot;&quot;&quot;
+    Fallback formatting if tokenizer has no chat template.
+    &quot;&quot;&quot;
+    lines = []
+    for m in messages:
+        role = m[&quot;role&quot;]
+        prefix = {&quot;system&quot;:&quot;[SYS]&quot;, &quot;user&quot;:&quot;[USER]&quot;, &quot;assistant&quot;:&quot;[ASSISTANT]&quot;}.get(role, f&quot;[{role.upper()}]&quot;)
+        lines.append(f&quot;{prefix}\n{m['content'].strip()}\n&quot;)
+    # Ensure the string ends with assistant text (trainer expects labels on last turn)
+    return &quot;\n&quot;.join(lines).strip()
+</code></pre>
+<hr />
+<h2 id="trainingtrain_lorapy">training/train_lora.py</h2>
+<ul>
+<li>
+<p>Loads <code>datasets/training/train.jsonl</code> and <code>val.jsonl</code></p>
+</li>
+<li>
+<p>Uses <strong>chat template</strong> if model has one; otherwise falls back</p>
+</li>
+<li>
+<p><strong>Masks labels</strong> so loss is computed only on the assistant span</p>
+</li>
+<li>
+<p>Trains with <strong>Trainer</strong> on CPU with your hyperparams</p>
+</li>
+<li>
+<p>Saves adapter + tokenizer + minimal <code>run.json</code></p>
+</li>
+</ul>
+<pre><code># training/train_lora.py  (fast demo edition)
+import os, json, time, math, random
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Dict, List, Any
+
+import torch
+from datasets import load_dataset
+from transformers import (AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments)
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from prompt_utils import to_chat, simple_template, DEFAULT_SYSTEM
+
+BASE_DIR = Path(&quot;/mnt/project/atharva-dental-assistant&quot;)
+DATA_DIR = BASE_DIR / &quot;datasets&quot; / &quot;training&quot;
+
+# ------------------------------
+# Demo-friendly defaults (override via env)
+# ------------------------------
+BASE_MODEL   = os.environ.get(&quot;BASE_MODEL&quot;, &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;)
+MAX_SEQ_LEN  = int(os.environ.get(&quot;MAX_SEQ_LEN&quot;, &quot;256&quot;))     # ↓ from 512
+LORA_R       = int(os.environ.get(&quot;LORA_R&quot;, &quot;4&quot;))            # ↓ from 8
+LORA_ALPHA   = int(os.environ.get(&quot;LORA_ALPHA&quot;, &quot;8&quot;))        # ↓ from 16
+LORA_DROPOUT = float(os.environ.get(&quot;LORA_DROPOUT&quot;, &quot;0.05&quot;))
+LR           = float(os.environ.get(&quot;LR&quot;, &quot;2e-4&quot;))
+WARMUP_RATIO = float(os.environ.get(&quot;WARMUP_RATIO&quot;, &quot;0.02&quot;))
+BATCH_SIZE   = int(os.environ.get(&quot;BATCH_SIZE&quot;, &quot;1&quot;))
+GRAD_ACCUM   = int(os.environ.get(&quot;GRAD_ACCUM&quot;, &quot;4&quot;))        # ↓ from 8
+MAX_STEPS    = int(os.environ.get(&quot;MAX_STEPS&quot;, &quot;80&quot;))        # ↓ from 400 (≈5–10 min)
+# Optional dataset subsample for speed (0 = use all)
+DEMO_MAX_TRAIN_SAMPLES = int(os.environ.get(&quot;DEMO_MAX_TRAIN_SAMPLES&quot;, &quot;0&quot;))
+DEMO_MAX_VAL_SAMPLES   = int(os.environ.get(&quot;DEMO_MAX_VAL_SAMPLES&quot;, &quot;0&quot;))
+
+OUTPUT_ROOT = BASE_DIR / &quot;artifacts&quot; / &quot;train&quot; / time.strftime(&quot;%Y%m%d-%H%M%S&quot;)
+
+# Use all CPU cores for a faster demo
+torch.set_num_threads(max(1, os.cpu_count()))
+
+print(f&quot;Base model: {BASE_MODEL}&quot;)
+print(f&quot;Output dir: {OUTPUT_ROOT}&quot;)
+
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+    torch_dtype=torch.float32,
+    device_map=None
+)
+model = prepare_model_for_kbit_training(model)  # safe on CPU
+
+# Trim LoRA to attention projections only (fewer trainable params)
+peft_cfg = LoraConfig(
+    r=LORA_R,
+    lora_alpha=LORA_ALPHA,
+    target_modules=[&quot;q_proj&quot;,&quot;k_proj&quot;,&quot;v_proj&quot;,&quot;o_proj&quot;],
+    lora_dropout=LORA_DROPOUT,
+    bias=&quot;none&quot;,
+    task_type=&quot;CAUSAL_LM&quot;
+)
+model = get_peft_model(model, peft_cfg)
+
+def build_example(messages: List[Dict[str, str]]) -&gt; Dict[str, Any]:
+    msgs = to_chat(messages, DEFAULT_SYSTEM)
+    use_chat_template = hasattr(tokenizer, &quot;apply_chat_template&quot;)
+    text_prompt = (
+        tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+        if use_chat_template else simple_template(msgs)
+    )
+    # Find assistant content for label masking
+    assistant_text = [m[&quot;content&quot;] for m in msgs if m[&quot;role&quot;]==&quot;assistant&quot;][-1]
+    _ = assistant_text.strip()
+
+    tok = tokenizer(text_prompt, truncation=True, max_length=MAX_SEQ_LEN, padding=False, return_tensors=None)
+
+    prefix_msgs = [m for m in msgs if m[&quot;role&quot;]!=&quot;assistant&quot;]
+    prefix_text = (
+        tokenizer.apply_chat_template(prefix_msgs, tokenize=False, add_generation_prompt=True)
+        if use_chat_template else simple_template(prefix_msgs) + &quot;\n[ASSISTANT]\n&quot;
+    )
+    prefix_tok = tokenizer(prefix_text, truncation=True, max_length=MAX_SEQ_LEN, padding=False, return_tensors=None)
+
+    input_ids = tok[&quot;input_ids&quot;]
+    labels = input_ids.copy()
+    mask_len = min(len(prefix_tok[&quot;input_ids&quot;]), len(labels))
+    labels[:mask_len] = [-100] * mask_len
+    return {&quot;input_ids&quot;: input_ids, &quot;labels&quot;: labels, &quot;attention_mask&quot;: [1]*len(input_ids)}
+
+def load_jsonl(path: Path):
+    for line in path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        if not line.strip(): continue
+        yield json.loads(line)
+
+# ------------------------------
+# Load + optional subsample
+# ------------------------------
+train_records = list(load_jsonl(DATA_DIR/&quot;train.jsonl&quot;))
+val_records   = list(load_jsonl(DATA_DIR/&quot;val.jsonl&quot;))
+
+if DEMO_MAX_TRAIN_SAMPLES &gt; 0 and len(train_records) &gt; DEMO_MAX_TRAIN_SAMPLES:
+    random.seed(42)
+    train_records = random.sample(train_records, DEMO_MAX_TRAIN_SAMPLES)
+if DEMO_MAX_VAL_SAMPLES &gt; 0 and len(val_records) &gt; DEMO_MAX_VAL_SAMPLES:
+    random.seed(123)
+    val_records = random.sample(val_records, DEMO_MAX_VAL_SAMPLES)
+
+train_ds = [build_example(rec[&quot;messages&quot;]) for rec in train_records]
+val_ds   = [build_example(rec[&quot;messages&quot;]) for rec in val_records]
+
+@dataclass
+class Collator:
+    pad_token_id: int = tokenizer.pad_token_id
+    def __call__(self, batch):
+        maxlen = max(len(x[&quot;input_ids&quot;]) for x in batch)
+        input_ids, labels, attn = [], [], []
+        for x in batch:
+            pad    = [self.pad_token_id] * (maxlen - len(x[&quot;input_ids&quot;]))
+            maskpd = [0] * (maxlen - len(x[&quot;attention_mask&quot;]))
+            lblpd  = [-100] * (maxlen - len(x[&quot;labels&quot;]))  # ← fixed missing ')'
+            input_ids.append(x[&quot;input_ids&quot;] + pad)
+            labels.append(x[&quot;labels&quot;] + lblpd)
+            attn.append(x[&quot;attention_mask&quot;] + maskpd)
+        return {
+            &quot;input_ids&quot;: torch.tensor(input_ids, dtype=torch.long),
+            &quot;labels&quot;: torch.tensor(labels, dtype=torch.long),
+            &quot;attention_mask&quot;: torch.tensor(attn, dtype=torch.long),
+        }
+
+OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+
+# ------------------------------
+# Training args: no eval during train, single final save, fewer steps
+# ------------------------------
+args = TrainingArguments(
+    output_dir=str(OUTPUT_ROOT),
+    per_device_train_batch_size=BATCH_SIZE,
+    per_device_eval_batch_size=1,
+    gradient_accumulation_steps=GRAD_ACCUM,
+    learning_rate=LR,
+    warmup_ratio=WARMUP_RATIO,
+    max_steps=MAX_STEPS,
+    lr_scheduler_type=&quot;cosine&quot;,
+    logging_steps=50,
+    evaluation_strategy=&quot;no&quot;,         # ← no eval to save time
+    save_steps=10_000_000,            # ← avoid mid-run checkpoints
+    save_total_limit=1,               # ← keep only final
+    bf16=False, fp16=False,
+    dataloader_num_workers=0,
+    report_to=&quot;none&quot;
+)
+
+# Helpful run summary
+N = len(train_ds)
+steps_per_epoch = max(1, math.ceil(N / (BATCH_SIZE * GRAD_ACCUM)))
+est_epochs = args.max_steps / steps_per_epoch
+print(f&quot;Train examples: {N}, steps/epoch: {steps_per_epoch}, &quot;
+      f&quot;optimizer steps: {args.max_steps}, ~epochs: {est_epochs:.2f}&quot;)
+
+trainer = Trainer(
+    model=model,
+    args=args,
+    train_dataset=train_ds,
+    eval_dataset=None,    # no eval during training
+    data_collator=Collator(),
+)
+
+trainer.train()
+
+# Save adapter + tokenizer
+model.save_pretrained(str(OUTPUT_ROOT / &quot;lora_adapter&quot;))
+tokenizer.save_pretrained(str(OUTPUT_ROOT / &quot;tokenizer&quot;))
+
+# Run manifest
+(OUTPUT_ROOT / &quot;run.json&quot;).write_text(json.dumps({
+    &quot;base_model&quot;: BASE_MODEL,
+    &quot;max_seq_len&quot;: MAX_SEQ_LEN,
+    &quot;lora&quot;: {&quot;r&quot;: LORA_R, &quot;alpha&quot;: LORA_ALPHA, &quot;dropout&quot;: LORA_DROPOUT},
+    &quot;lr&quot;: LR, &quot;warmup_ratio&quot;: WARMUP_RATIO,
+    &quot;batch&quot;: BATCH_SIZE, &quot;grad_accum&quot;: GRAD_ACCUM, &quot;max_steps&quot;: MAX_STEPS,
+    &quot;demo_max_train_samples&quot;: DEMO_MAX_TRAIN_SAMPLES,
+    &quot;demo_max_val_samples&quot;: DEMO_MAX_VAL_SAMPLES
+}, indent=2), encoding=&quot;utf-8&quot;)
+
+print(f&quot;Training complete. Artifacts at {OUTPUT_ROOT}&quot;)
+</code></pre>
+<hr />
+<h2 id="trainingmerge_lorapy">training/merge_lora.py</h2>
+<p>Merges the adapter into the base model and writes a <strong>Transformers</strong> folder you can point vLLM at later. Also creates a <code>model.tgz</code> tarball for OCI packaging in the next lab.</p>
+<pre><code># training/merge_lora.py
+import os, json, shutil, tarfile
+from pathlib import Path
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+BASE_DIR = Path(&quot;/mnt/project/atharva-dental-assistant&quot;)
+ART_ROOT = BASE_DIR / &quot;artifacts&quot; / &quot;train&quot;
+
+BASE_MODEL = os.environ.get(&quot;BASE_MODEL&quot;, &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;)
+RUN_ID = os.environ[&quot;RUN_ID&quot;]  # e.g., 20250928-121314 (folder under artifacts/train)
+
+run_dir = ART_ROOT / RUN_ID
+adapter_dir = run_dir / &quot;lora_adapter&quot;
+tok_dir = run_dir / &quot;tokenizer&quot;
+out_dir = run_dir / &quot;merged-model&quot;
+
+assert adapter_dir.exists(), f&quot;Missing adapter at {adapter_dir}&quot;
+
+print(f&quot;Loading base {BASE_MODEL} and merging adapter from {adapter_dir}&quot;)
+base = AutoModelForCausalLM.from_pretrained(BASE_MODEL, torch_dtype=torch.float32, device_map=None)
+merged = PeftModel.from_pretrained(base, str(adapter_dir))
+merged = merged.merge_and_unload()  # apply LoRA into base weights
+tok = AutoTokenizer.from_pretrained(tok_dir if tok_dir.exists() else BASE_MODEL, use_fast=True)
+
+out_dir.mkdir(parents=True, exist_ok=True)
+merged.save_pretrained(out_dir)
+tok.save_pretrained(out_dir)
+
+# Create a tarball for OCI packaging in Lab 3
+#tgz_path = run_dir / &quot;model.tgz&quot;
+#with tarfile.open(tgz_path, &quot;w:gz&quot;) as tar:
+#    tar.add(out_dir, arcname=&quot;model&quot;)
+#print(f&quot;Merged model saved at {out_dir}, tarball at {tgz_path}&quot;)
+</code></pre>
+<hr />
+<h2 id="k8s20-trainjob-train-lorayaml">k8s/20-train/job-train-lora.yaml</h2>
+<p>Runs the training container mounting your repo path. Adjust <code>MAX_STEPS</code> to 300–600.</p>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: atharva-train-lora
+  namespace: atharva-ml
+spec:
+  ttlSecondsAfterFinished: 7200   # auto-clean up pod 2h after completion
+  template:
+    spec:
+      nodeName: llmops-kind-worker
+      restartPolicy: Never
+      containers:
+      - name: train
+        image: schoolofdevops/lora-build-python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            python /mnt/project/atharva-dental-assistant/training/train_lora.py
+        env:
+        - name: BASE_MODEL
+          value: &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;
+        - name: MAX_SEQ_LEN
+          value: &quot;256&quot;
+        - name: LORA_R
+          value: &quot;4&quot;
+        - name: LORA_ALPHA
+          value: &quot;8&quot;
+        - name: LORA_DROPOUT
+          value: &quot;0.05&quot;
+        - name: LR
+          value: &quot;2e-4&quot;
+        - name: WARMUP_RATIO
+          value: &quot;0.02&quot;
+        - name: BATCH_SIZE
+          value: &quot;1&quot;
+        - name: GRAD_ACCUM
+          value: &quot;1&quot;
+        - name: MAX_STEPS
+          value: &quot;80&quot;
+        - name: DEMO_MAX_TRAIN_SAMPLES
+          value: &quot;0&quot;
+        - name: DEMO_MAX_VAL_SAMPLES
+          value: &quot;0&quot;
+        - name: HF_HOME
+          value: &quot;/cache/hf&quot;              # model/dataset cache across runs
+        - name: HF_HUB_DISABLE_TELEMETRY
+          value: &quot;1&quot;
+        - name: TOKENIZERS_PARALLELISM
+          value: &quot;true&quot;
+        # Thread caps to avoid oversubscription; align to CPU limits below
+        - name: OMP_NUM_THREADS
+          value: &quot;4&quot;
+        - name: MKL_NUM_THREADS
+          value: &quot;4&quot;
+        - name: NUMEXPR_MAX_THREADS
+          value: &quot;4&quot;
+        resources:
+          requests:
+            cpu: &quot;2&quot;
+            memory: &quot;4Gi&quot;
+            ephemeral-storage: &quot;5Gi&quot;
+          limits:
+            cpu: &quot;4&quot;
+            memory: &quot;6Gi&quot;
+            ephemeral-storage: &quot;20Gi&quot;
+        volumeMounts:
+        - name: host
+          mountPath: /mnt/project
+      volumes:
+      - name: host
+        hostPath:
+          path: /mnt/project
+          type: Directory
+      - name: hf-cache
+        hostPath:
+          path: /mnt/hf-cache               # create once on the node
+          type: DirectoryOrCreate
+</code></pre>
+<blockquote>
+<p>You can switch the container to the purpose-built image from <code>training/Dockerfile</code> later; the above installs deps inline to keep the lab minimal.</p>
+</blockquote>
+<hr />
+<h2 id="k8s20-trainjob-merge-modelyaml">k8s/20-train/job-merge-model.yaml</h2>
+<p>Merges the adapter and creates a <code>model.tgz</code>. Provide <code>RUN_ID</code> (the timestamped folder created by the training job).</p>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: atharva-merge-model
+  namespace: atharva-ml
+spec:
+  template:
+    spec:
+      nodeName: llmops-kind-worker
+      restartPolicy: Never
+      containers:
+      - name: merge
+        image: schoolofdevops/lora-build-python:3.11-slim
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            python /mnt/project/atharva-dental-assistant/training/merge_lora.py
+        env:
+        - name: BASE_MODEL
+          value: &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;
+        - name: RUN_ID
+          value: &quot;REPLACE_WITH_RUN_ID&quot;
+        volumeMounts:
+        - name: host
+          mountPath: /mnt/project
+      volumes:
+      - name: host
+        hostPath: { path: /mnt/project, type: Directory }
+</code></pre>
+<hr />
+<h2 id="scriptstrain_lorash">scripts/train_lora.sh</h2>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/20-train/job-train-lora.yaml
+kubectl -n atharva-ml wait --for=condition=complete job/atharva-train-lora --timeout=12h
+kubectl -n atharva-ml logs job/atharva-train-lora
+echo &quot;Artifacts under artifacts/train/&lt;run-id&gt;/&quot;
+</code></pre>
+<blockquote>
+<p>After it finishes, list the timestamped folder:</p>
+<p><code>ls -1 artifacts/train</code> → copy the folder name (e.g., <code>20251001-1130xx</code>).</p>
+</blockquote>
+<h2 id="scriptsmerge_modelsh">scripts/merge_model.sh</h2>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  echo &quot;Usage: $0 &lt;RUN_ID&gt;&quot;
+  exit 1
+fi
+RUN_ID=&quot;$1&quot;
+
+# Patch the manifest with the RUN_ID and apply
+tmp=$(mktemp)
+sed &quot;s/REPLACE_WITH_RUN_ID/${RUN_ID}/g&quot; k8s/20-train/job-merge-model.yaml &gt; &quot;$tmp&quot;
+kubectl apply -f &quot;$tmp&quot;
+kubectl -n atharva-ml wait --for=condition=complete job/atharva-merge-model --timeout=60m
+kubectl -n atharva-ml logs job/atharva-merge-model
+
+echo &quot;Merged model at artifacts/train/${RUN_ID}/merged-model&quot;
+#echo &quot;Tarball at artifacts/train/${RUN_ID}/model.tgz&quot;
+</code></pre>
+<hr />
+<h2 id="run-the-lab">🧪 Run the lab</h2>
+<pre><code># 0) (If not done) Ensure Lab 1’s data exists under datasets/training/{train,val}.jsonl
+
+# 1) Load Base Image to a node 
+
+docker image pull schoolofdevops/lora-build-python:3.11-slim
+
+kind load docker-image --name llmops-kind schoolofdevops/lora-build-python:3.11-slim --nodes llmops-kind-worker
+
+# 2) Start fine-tuning (CPU). This can take a while; steps are small on purpose.
+bash scripts/train_lora.sh
+
+# 3) Find the run-id (timestamp folder) created by the job:
+ls -1 artifacts/train
+
+# 4) Merge adapters into base &amp; create tarball
+bash scripts/merge_model.sh &lt;RUN_ID&gt;
+
+# 5) Inspect outputs
+tree artifacts/train/&lt;RUN_ID&gt; | sed -n '1,200p'
+</code></pre>
+<p>You should see:</p>
+<ul>
+<li>
+<p><code>lora_adapter/</code> (adapter weights),</p>
+</li>
+<li>
+<p><code>tokenizer/</code>,</p>
+</li>
+<li>
+<p><code>run.json</code>,</p>
+</li>
+<li>
+<p><code>merged-model/</code> (Transformers folder with <code>config.json</code>, <code>model.safetensors</code>, tokenizer files),</p>
+</li>
+<li>
+<p><code>model.tgz</code> (for OCI packaging in the next lab).</p>
+</li>
+</ul>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Fine-tuned <strong>SmolLM2-135M</strong> on <strong>Kubernetes (CPU)</strong> with <strong>LoRA</strong> to learn Atharva’s style:</p>
+</li>
+<li>
+<p>concise steps, safety tone, ask-back, and <strong>always include <code>Source:</code></strong>.</p>
+</li>
+<li>
+<p>Produced reproducible artifacts under <code>artifacts/train/&lt;run-id&gt;/</code>.</p>
+</li>
+<li>
+<p><strong>Merged</strong> adapters → a <strong>single folder</strong> that vLLM can serve.</p>
+</li>
+<li>
+<p>Created a <strong>tarball</strong> ready to be wrapped into an <strong>OCI image</strong> and mounted via <strong>ImageVolumes</strong> later.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab01/" class="btn btn-neutral float-left" title="Lab 01 - Building RAG system"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../lab03/" class="btn btn-neutral float-right" title="Lab 03 - Packaging Model as OCI Image">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab01/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../lab03/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

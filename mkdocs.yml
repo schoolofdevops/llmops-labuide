@@ -14,6 +14,7 @@ nav:
      - Lab 05 - LLM Observability with Prometheus: "lab05.md"
      - Lab 06 - Autoscaling vLLM + RAG + Chat API: "lab06.md"
      - Lab 07 - GitOps for GenAI with ArgoCD: "lab07.md"
+     - Lab 08 - Automating LLM pipelines with Argo Workflows: "lab08.md"
 docs_dir: docs
 theme: readthedocs
 plugins:

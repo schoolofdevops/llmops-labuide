@@ -35,7 +35,7 @@ Each lab builds on the previous one, progressively assembling the full GenAI sta
 | **[Lab 05 – Observability with Prometheus + Grafana](lab05.md)** | Instrument vLLM, Retriever, and Chat API with Prometheus metrics; build a Grafana dashboard for model and system insights. |
 | **[Lab 06 – Autoscaling vLLM + RAG + Chat API](lab06.md)** | Implement CPU-based HPA, Prometheus-driven scaling via KEDA, and VPA recommendations for resource optimization. |
 | **[Lab 07 – GitOps for GenAI with ArgoCD](lab07.md)** | Manage continuous delivery for all GenAI components using ArgoCD App-of-Apps and GitOps workflows. |
-
+| **[Lab 08 - Automating LLM pipelines with Argo Workflows](lab08.md)** | Automate LLM Workflows with DAG Based Kubeflow alternative i.e. Argo Workflow. |
 ---
 
 ## Tech Stack

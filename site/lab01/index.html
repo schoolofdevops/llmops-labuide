@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://llmops-tutorial.schoolofdevops.com/lab01/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 01 - Building RAG system - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 01 - Building RAG system";
+        var mkdocs_page_input_path = "lab01.md";
+        var mkdocs_page_url = "/lab01/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 01 - Building RAG system</a>
+    <ul class="current">
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab08/">Lab 08 - Automating LLM pipelines with Argo Workflows</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 01 - Building RAG system</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab01.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-1-synthetic-data-rag-system-cpu-only">Lab 1: Synthetic data + RAG system (CPU-only)</h1>
+<p>Below are copy-pasteable files + commands so you can run this end-to-end on the KIND cluster you set up in Lab 0.</p>
+<hr />
+<h1 id="repo-layout-added-in-this-lab">📁 Repo layout added in this lab</h1>
+<pre><code>atharva-dental-assistant/
+├─ datasets/
+│  └─ clinic/
+│     ├─ treatments.json               # synthetic seed data (few rows to start)
+│     ├─ policies/
+│     │  ├─ appointments.md
+│     │  ├─ billing.md
+│     │  ├─ cancellations.md
+│     │  ├─ emergency.md
+│     │  └─ sterilization.md
+│     ├─ faq.md
+│     └─ recent_queries.jsonl
+├─ artifacts/                          # generated by jobs (auto-created)
+├─ tools/
+│  ├─ synth_data.py                    # makes train/val/eval JSONL
+│  └─ common.py                        # tiny helpers
+├─ rag/
+│  ├─ build_index.py                   # chunks + embeds + FAISS
+│  └─ retriever.py                     # FastAPI service
+├─ k8s/
+│  ├─ 10-data/
+│  │  ├─ job-generate-data.yaml
+│  │  └─ job-build-index.yaml
+│  └─ 40-serve/
+│     ├─ deploy-retriever.yaml
+│     └─ svc-retriever.yaml
+└─ scripts/
+   ├─ generate_data.sh
+   ├─ build_index.sh
+   └─ deploy_retriever.sh
+</code></pre>
+<blockquote>
+<p>In Lab 0 your KIND nodes already mount <code>./project</code> → <code>/mnt/project</code>.
+Place this repo under <code>./project/atharva-dental-assistant</code> so Jobs can see it at <code>/mnt/project/atharva-dental-assistant</code>.</p>
+</blockquote>
+<p>Start creating the repo </p>
+<pre><code>cd project/atharva-dental-assistant
+mkdir -p datasets/clinic/policies tools rag k8s/10-data k8s/40-serve scripts
+</code></pre>
+<p>Also set the namespace to <code>atharva-ml</code></p>
+<pre><code>kubectl config get-contexts
+
+kubectl config set-context --current --namespace=atharva-ml
+</code></pre>
+<hr />
+<h2 id="1-seed-the-clinic-content-synthetic-but-realistic">1) Seed the clinic content (synthetic but realistic)</h2>
+<p>Create these minimal files; you can expand later.</p>
+<h3 id="datasetsclinictreatmentsjson"><code>datasets/clinic/treatments.json</code></h3>
+<pre><code>[
+  {
+    &quot;code&quot;: &quot;TX-SCALE-01&quot;,
+    &quot;name&quot;: &quot;Scaling &amp; Polishing&quot;,
+    &quot;category&quot;: &quot;Preventive&quot;,
+    &quot;indications&quot;: [&quot;Tartar buildup&quot;, &quot;Gingival bleeding&quot;],
+    &quot;contraindications&quot;: [],
+    &quot;steps&quot;: [&quot;Ultrasonic scaling&quot;, &quot;Polishing&quot;, &quot;Fluoride advice&quot;],
+    &quot;duration_minutes&quot;: 40,
+    &quot;visits&quot;: 1,
+    &quot;price_band_inr&quot;: [1200, 1800],
+    &quot;aftercare&quot;: [&quot;Warm saline rinses 24h&quot;, &quot;Soft bristle brushing&quot;],
+    &quot;risks&quot;: [&quot;Transient sensitivity&quot;]
+  },
+  {
+    &quot;code&quot;: &quot;TX-RCT-01&quot;,
+    &quot;name&quot;: &quot;Root Canal Therapy&quot;,
+    &quot;category&quot;: &quot;Endodontics&quot;,
+    &quot;indications&quot;: [&quot;Deep caries&quot;, &quot;Pulpitis&quot;, &quot;Apical periodontitis&quot;],
+    &quot;contraindications&quot;: [&quot;Poor crown-root ratio (relative)&quot;],
+    &quot;steps&quot;: [&quot;Local anesthesia&quot;, &quot;Canal cleaning&quot;, &quot;Obturation&quot;, &quot;Temporary filling&quot;],
+    &quot;duration_minutes&quot;: 90,
+    &quot;visits&quot;: 2,
+    &quot;price_band_inr&quot;: [6000, 9500],
+    &quot;aftercare&quot;: [&quot;Analgesics as advised&quot;, &quot;Avoid hard chewing until crown&quot;],
+    &quot;risks&quot;: [&quot;Post-op soreness&quot;, &quot;Instrument separation (rare)&quot;]
+  },
+  {
+    &quot;code&quot;: &quot;TX-FILL-01&quot;,
+    &quot;name&quot;: &quot;Composite Filling&quot;,
+    &quot;category&quot;: &quot;Restorative&quot;,
+    &quot;indications&quot;: [&quot;Dental caries&quot;, &quot;Chipped tooth (minor)&quot;],
+    &quot;contraindications&quot;: [],
+    &quot;steps&quot;: [&quot;Isolation&quot;, &quot;Decay removal&quot;, &quot;Bonding&quot;, &quot;Composite placement and curing&quot;, &quot;Polishing&quot;],
+    &quot;duration_minutes&quot;: 20,
+    &quot;visits&quot;: 1,
+    &quot;price_band_inr&quot;: [1200, 2000],
+    &quot;aftercare&quot;: [&quot;Avoid very hard foods for 24h&quot;, &quot;Monitor sensitivity to cold/sweets&quot;],
+    &quot;risks&quot;: [&quot;Transient sensitivity&quot;, &quot;Marginal staining over time&quot;]
+},
+{
+    &quot;code&quot;: &quot;TX-EXT-01&quot;,
+    &quot;name&quot;: &quot;Tooth Extraction&quot;,
+    &quot;category&quot;: &quot;Oral Surgery&quot;,
+    &quot;indications&quot;: [&quot;Non-restorable tooth&quot;, &quot;Severe mobility&quot;, &quot;Impacted tooth (varies)&quot;],
+    &quot;contraindications&quot;: [&quot;Uncontrolled bleeding disorders (relative)&quot;, &quot;Uncontrolled diabetes (relative)&quot;],
+    &quot;steps&quot;: [&quot;Local anesthesia&quot;, &quot;Tooth luxation&quot;, &quot;Removal&quot;, &quot;Hemostasis&quot;],
+    &quot;duration_minutes&quot;: 30,
+    &quot;visits&quot;: 1,
+    &quot;price_band_inr&quot;: [1500, 3500],
+    &quot;aftercare&quot;: [&quot;Bite on gauze 30–45 min&quot;, &quot;No spitting/rinsing 24h&quot;, &quot;No straws/smoking 48–72h&quot;, &quot;Soft diet first day&quot;],
+    &quot;risks&quot;: [&quot;Dry socket&quot;, &quot;Bleeding&quot;, &quot;Swelling&quot;]
+}
+
+]
+</code></pre>
+<h3 id="datasetsclinicpoliciesappointmentsmd"><code>datasets/clinic/policies/appointments.md</code></h3>
+<pre><code># Appointments
+- Hours: Mon–Sat 9:30–18:30 (Pune, IST).
+- Booking: phone/WhatsApp/website form.
+- Emergency slots: limited, call ahead.
+</code></pre>
+<h3 id="datasetsclinicpoliciesbillingmd"><code>datasets/clinic/policies/billing.md</code></h3>
+<pre><code># Billing
+- Currency: INR.
+- Payments: UPI, cards, netbanking.
+- Insurance: reimbursement support; direct tie-ups listed at reception.
+</code></pre>
+<h3 id="datasetsclinicpoliciescancellationsmd"><code>datasets/clinic/policies/cancellations.md</code></h3>
+<pre><code># Cancellations
+- 24h notice requested.
+- Same-day cancellations may incur ₹300 chair-time fee.
+</code></pre>
+<h3 id="datasetsclinicpoliciesemergencymd"><code>datasets/clinic/policies/emergency.md</code></h3>
+<pre><code># Emergency
+- Red flags: uncontrolled bleeding, facial swelling, high fever, trauma.
+- Call: +91-20-4000-0000 (day); after-hours +91-99-9999-9999.
+- Fever after extraction with foul taste may indicate infection—seek evaluation.
+- Rapidly worsening swelling with difficulty opening mouth (trismus) requires urgent care.
+</code></pre>
+<h3 id="datasetsclinicpoliciessterilizationmd"><code>datasets/clinic/policies/sterilization.md</code></h3>
+<pre><code># Sterilization
+- Class-B autoclave cycles, pouched instruments, surface disinfection between patients.
+</code></pre>
+<h3 id="datasetsclinicfaqmd"><code>datasets/clinic/faq.md</code></h3>
+<pre><code># FAQs
+Q: Is scaling painful?  
+A: Mild discomfort; local anesthesia for sensitive cases.
+
+Q: Do whitening results last?  
+A: 6–12 months; depends on diet and habits.
+
+Q: Do you work on Sundays?  
+A: Only emergency slots on call.
+</code></pre>
+<h3 id="datasetsclinicrecent_queriesjsonl"><code>datasets/clinic/recent_queries.jsonl</code></h3>
+<pre><code>{&quot;ts&quot;:&quot;2025-09-20T11:05:00Z&quot;,&quot;q&quot;:&quot;Can I eat spicy food after scaling?&quot;,&quot;a&quot;:&quot;Prefer soft foods for 24h; avoid very hot/spicy today.&quot;}
+{&quot;ts&quot;:&quot;2025-09-22T15:22:00Z&quot;,&quot;q&quot;:&quot;RCT pain next day normal?&quot;,&quot;a&quot;:&quot;Mild soreness common 24–48h; call if severe swelling/fever.&quot;}
+</code></pre>
+<hr />
+<h2 id="2-data-synth-tool-trainvaleval-jsonl">2) Data synth tool (train/val/eval JSONL)</h2>
+<h3 id="toolscommonpy"><code>tools/common.py</code></h3>
+<pre><code>import random, re
+from pathlib import Path
+
+def read_md(path: Path) -&gt; str:
+    return path.read_text(encoding=&quot;utf-8&quot;)
+
+def normalize_ws(s: str) -&gt; str:
+    return re.sub(r&quot;\s+&quot;, &quot; &quot;, s).strip()
+
+def sys_prompt() -&gt; str:
+    return (&quot;You are Atharva Dental Clinic assistant in Pune (INR). &quot;
+            &quot;Be concise, safety-minded, include 'Source:' with file#section. &quot;
+            &quot;If info is missing, ask follow-up questions.&quot;)
+</code></pre>
+<h3 id="toolssynth_datapy"><code>tools/synth_data.py</code></h3>
+<pre><code>import json, argparse, random, re
+from pathlib import Path
+from difflib import SequenceMatcher
+
+# If you still want to keep common.read_md/normalize_ws, import them.
+from common import read_md, normalize_ws  # noqa: F401
+
+random.seed(42)
+
+def make_system_prompt(clinic: str, currency: str) -&gt; str:
+    return (
+        f&quot;You are Atharva Dental Clinic assistant in {clinic}, India. &quot;
+        f&quot;Respond in concise steps, use {currency} (₹) for any prices, be safety-minded, &quot;
+        f&quot;ask for missing info when necessary, and ALWAYS include a final 'Source:' line &quot;
+        f&quot;citing file#section for facts derived from context.&quot;
+    )
+
+def fmt_inr(x: int) -&gt; str:
+    return f&quot;₹{x:,}&quot;
+
+def join_steps(items):
+    &quot;&quot;&quot;
+    Return a plain, semicolon-separated list (no numbering).
+    We'll format to numbered steps later in normalize_list_answer().
+    &quot;&quot;&quot;
+    return &quot;; &quot;.join(s.strip() for s in items if s and str(s).strip())
+
+_BULLET_PREFIX = re.compile(r'^\s*(?:[-*•]+|\d+[.)])\s*', re.IGNORECASE)
+
+def _strip_bullet(s: str) -&gt; str:
+    return _BULLET_PREFIX.sub(&quot;&quot;, s).strip()
+
+def _capitalize_first(s: str) -&gt; str:
+    return s[:1].upper() + s[1:] if s else s
+
+def normalize_list_answer(text: str) -&gt; str:
+    &quot;&quot;&quot;
+    If the answer is a list (separated by ';' or newlines), convert to numbered 1) ... lines.
+    If it's already numbered/bulleted, strip existing bullets/numbers and renumber cleanly.
+    Single-line answers are returned as-is (with trimmed whitespace).
+    &quot;&quot;&quot;
+    if text is None:
+        return &quot;&quot;
+    raw = text.strip()
+
+    # If it already looks like multiple lines or contains semicolons, treat as a list
+    is_listy = (&quot;;&quot; in raw) or (&quot;\n&quot; in raw)
+
+    # Split on semicolons OR newlines, keep non-empty
+    parts = [p for p in re.split(r&quot;[;\n]+&quot;, raw) if p.strip()]
+    # If splitting produced only one item and it doesn't start with bullets/numbers, return trimmed
+    if len(parts) &lt;= 1 and not _BULLET_PREFIX.match(raw):
+        return raw
+
+    # If it's single line but has bullets/numbers, treat as one part
+    if len(parts) &lt;= 1:
+        parts = [raw]
+
+    # Clean bullets/numbers and whitespace; capitalize first letter of each step
+    cleaned = [_capitalize_first(_strip_bullet(p)) for p in parts if _strip_bullet(p)]
+
+    # If after cleaning we only have one part, just return it
+    if len(cleaned) &lt;= 1 and not is_listy:
+        return cleaned[0] if cleaned else raw
+
+    # Number them
+    return &quot;\n&quot;.join(f&quot;{i+1}) {p}&quot; for i, p in enumerate(cleaned))
+
+def add_paraphrases(q: str) -&gt; list[str]:
+    out = [q]
+    ql = q.lower()
+
+    m = re.match(r&quot;how long does (.+?) take and how many visits\??&quot;, q, flags=re.I)
+    if m:
+        proc = m.group(1)
+        out.append(f&quot;{proc} — duration and number of visits?&quot;)
+        out.append(f&quot;What's the time per visit and total visits for {proc}?&quot;)
+
+    if &quot;what is the cost for &quot; in ql:
+        proc = q[q.lower().find(&quot;what is the cost for &quot;)+len(&quot;what is the cost for &quot;):].rstrip(&quot;?&quot;)
+        out.append(f&quot;Approximate price range for {proc}?&quot;)
+        out.append(f&quot;How much does {proc} typically cost?&quot;)
+
+    if re.search(r&quot;\baftercare\b&quot;, ql):
+        out.append(q.replace(&quot;What are aftercare steps&quot;, &quot;Post-treatment care steps&quot;))
+
+    uniq = []
+    seen = set()
+    for cand in out:
+        if cand not in seen:
+            seen.add(cand)
+            uniq.append(cand)
+    return uniq
+
+def near_duplicate(a: str, b: str, threshold: float = 0.90) -&gt; bool:
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio() &gt;= threshold
+
+def emit_sample(system_prompt, q, a, source, ask_clarify: str | None = None):
+    # Normalize to consistent numbered-steps style when list-like
+    norm_a = normalize_list_answer(a)
+    if ask_clarify:
+        # Ensure the clarifying question starts on a new line and is properly capitalized
+        clar = _capitalize_first(ask_clarify.strip())
+        norm_a = f&quot;{norm_a}\n{clar}&quot;
+    return {
+        &quot;messages&quot;: [
+            {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: system_prompt},
+            {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: q},
+            {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: f&quot;{norm_a}\nSource: {source}&quot;}
+        ]
+    }
+
+def clean_text(s: str) -&gt; str:
+    return re.sub(r&quot;\s+&quot;, &quot; &quot;, s).strip()
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(&quot;--clinic&quot;, default=&quot;Pune&quot;)
+    ap.add_argument(&quot;--currency&quot;, default=&quot;INR&quot;)
+    ap.add_argument(&quot;--treatments&quot;, required=True)
+    ap.add_argument(&quot;--policies&quot;, nargs=&quot;+&quot;, required=True)
+    ap.add_argument(&quot;--faq&quot;, required=True)
+    ap.add_argument(&quot;--recent&quot;, required=True)
+    ap.add_argument(&quot;--out&quot;, required=True)
+    ap.add_argument(&quot;--max_per_treatment&quot;, type=int, default=7,
+                    help=&quot;Upper bound of Q/A variants per treatment&quot;)
+    args = ap.parse_args()
+
+    out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    train, val, evalq = [], [], []
+    sys_p = make_system_prompt(args.clinic, args.currency)
+
+    # ----------------------------
+    # Treatments → richer Q/A set
+    # ----------------------------
+    treatments = json.loads(Path(args.treatments).read_text(encoding=&quot;utf-8&quot;))
+    for t in treatments:
+        code = t.get(&quot;code&quot;, &quot;TX-UNK&quot;)
+        name = t[&quot;name&quot;]
+        dur = t.get(&quot;duration_minutes&quot;)
+        visits = t.get(&quot;visits&quot;)
+        low, high = t.get(&quot;price_band_inr&quot;, [None, None])
+        aftercare = t.get(&quot;aftercare&quot;, [])
+        risks = t.get(&quot;risks&quot;, [])
+        indications = t.get(&quot;indications&quot;, [])
+        contraind = t.get(&quot;contraindications&quot;, [])
+
+        src = f&quot;treatments.json#{code}&quot;
+
+        samples = []
+
+        # 1) Duration + visits + price (+ 1–2 paraphrases)
+        if dur and visits and low is not None and high is not None:
+            q = f&quot;How long does {name} take and how many visits?&quot;
+            a = join_steps([
+                f&quot;Typically {dur} minutes&quot;,
+                f&quot;About {visits} visit(s)&quot;,
+                f&quot;Price band: {fmt_inr(low)}–{fmt_inr(high)}&quot;
+            ])
+            for pq in add_paraphrases(q)[:2]:
+                samples.append(emit_sample(sys_p, pq, a, src))
+
+        # 2) Aftercare (+ 1 paraphrase)
+        if aftercare:
+            q = f&quot;What are aftercare steps for {name}?&quot;
+            a = join_steps(aftercare)
+            for pq in add_paraphrases(q)[:2]:
+                samples.append(emit_sample(sys_p, pq, a, src))
+
+        # 3) Risks
+        q = f&quot;Any risks with {name}?&quot;
+        a = join_steps(risks) if risks else &quot;Minimal risks when indicated by the clinician.&quot;
+        samples.append(emit_sample(sys_p, q, a, src))
+
+        # 4) Cost-only (+ 1 paraphrase)
+        if low is not None and high is not None:
+            q = f&quot;What is the cost for {name}?&quot;
+            a = f&quot;{fmt_inr(low)}–{fmt_inr(high)} depending on case complexity and materials.&quot;
+            for pq in add_paraphrases(q)[:2]:
+                samples.append(emit_sample(sys_p, pq, a, src))
+
+        # 5) Pain/comfort expectation
+        q = f&quot;Is {name.lower()} painful?&quot;
+        if &quot;Scaling&quot; in name:
+            a = &quot;You may feel mild discomfort; anesthesia can be used for sensitive cases.&quot;
+        elif &quot;Root Canal&quot; in name:
+            a = &quot;Local anesthesia is used; you may feel post-op soreness for 24–48h.&quot;
+        else:
+            a = &quot;Local anesthesia minimizes pain; some soreness after the procedure is common.&quot;
+        samples.append(emit_sample(sys_p, q, a, src))
+
+        # 6) Eligibility/contraindications (if present)
+        if contraind:
+            q = f&quot;Who should avoid or be cautious about {name}?&quot;
+            a = join_steps(contraind) + &quot;; Consult your dentist to evaluate individual risks.&quot;
+            samples.append(emit_sample(sys_p, q, a, src))
+
+        # 7) When indicated
+        if indications:
+            q = f&quot;When is {name} recommended?&quot;
+            a = join_steps([f&quot;Indicated for: {', '.join(indications)}&quot;])
+            samples.append(emit_sample(sys_p, q, a, src))
+
+        # 8) Clarifying-quote variant
+        if low is not None and high is not None:
+            q = f&quot;Can I get a quick quote for {name}?&quot;
+            a = f&quot;Typical range is {fmt_inr(low)}–{fmt_inr(high)}; exact estimate varies by tooth and complexity.&quot;
+            ask = &quot;Which tooth/area and any prior treatment? I can give a closer estimate.&quot;
+            samples.append(emit_sample(sys_p, q, a, src, ask_clarify=ask))
+
+        if args.max_per_treatment &gt; 0:
+            samples = samples[:args.max_per_treatment]
+
+        train.extend(samples)
+
+    # ----------------------------
+    # Policies → Q/A
+    # ----------------------------
+    for p in args.policies:
+        path = Path(p)
+        if not path.exists():
+            continue
+        head = path.stem
+
+        if &quot;appointments&quot; in head:
+            train.append(emit_sample(
+                sys_p,
+                &quot;What are clinic hours?&quot;,
+                &quot;Mon–Sat 9:30–18:30 IST; limited emergency slots on call.&quot;,
+                f&quot;{head}.md#hours&quot;
+            ))
+            train.append(emit_sample(
+                sys_p,
+                &quot;Do you accept walk-ins?&quot;,
+                &quot;Appointments preferred; limited same-day slots may be available. Call/WhatsApp to check wait time.&quot;,
+                f&quot;{head}.md#walkins&quot;
+            ))
+
+        if &quot;cancellations&quot; in head:
+            train.append(emit_sample(
+                sys_p,
+                &quot;Cancellation policy?&quot;,
+                &quot;24h notice requested; same-day cancellations may incur a chair-time fee of ₹300.&quot;,
+                f&quot;{head}.md#policy&quot;
+            ))
+            train.append(emit_sample(
+                sys_p,
+                &quot;How to reschedule appointment?&quot;,
+                &quot;Call/WhatsApp at least 24h prior to reschedule; late changes may incur ₹300 fee.&quot;,
+                f&quot;{head}.md#reschedule&quot;
+            ))
+
+        if &quot;emergency&quot; in head:
+            train.append(emit_sample(
+                sys_p,
+                &quot;What are dental red flags?&quot;,
+                &quot;Uncontrolled bleeding, facial swelling, high fever, trauma—seek urgent care/call immediately.&quot;,
+                f&quot;{head}.md#red-flags&quot;
+            ))
+            train.append(emit_sample(
+                sys_p,
+                &quot;Wisdom tooth pain with swelling—what to do?&quot;,
+                join_steps([
+                    &quot;Avoid self-medicating antibiotics&quot;,
+                    &quot;Warm saline rinses&quot;,
+                    &quot;Seek urgent evaluation if fever, trismus, or spreading swelling&quot;
+                ]),
+                f&quot;{head}.md#wisdom-swelling&quot;
+            ))
+
+        if &quot;billing&quot; in head:
+            train.append(emit_sample(
+                sys_p,
+                &quot;Payment methods accepted?&quot;,
+                &quot;UPI, cards, netbanking; Insurance reimbursement support available.&quot;,
+                f&quot;{head}.md#methods&quot;
+            ))
+
+        if &quot;sterilization&quot; in head:
+            train.append(emit_sample(
+                sys_p,
+                &quot;How do you sterilize instruments?&quot;,
+                &quot;Class-B autoclave cycles, pouched instruments, surface disinfection between patients.&quot;,
+                f&quot;{head}.md#protocols&quot;
+            ))
+
+    # ----------------------------
+    # FAQs → a few seed items
+    # ----------------------------
+    if Path(args.faq).exists():
+        _ = read_md(Path(args.faq))
+        train.append(emit_sample(
+            sys_p, &quot;Is scaling painful?&quot;,
+            &quot;Mild discomfort; Local anesthesia for sensitive cases.&quot;,
+            &quot;faq.md#scaling-pain&quot;
+        ))
+        train.append(emit_sample(
+            sys_p, &quot;Do whitening results last?&quot;,
+            &quot;Results typically last 6–12 months; Depends on diet and habits.&quot;,
+            &quot;faq.md#whitening-duration&quot;
+        ))
+        train.append(emit_sample(
+            sys_p, &quot;Do you work on Sundays?&quot;,
+            &quot;Only emergency slots on call.&quot;,
+            &quot;faq.md#sunday-hours&quot;
+        ))
+
+    # ----------------------------
+    # Deduplicate near-identical questions
+    # ----------------------------
+    deduped = []
+    seen_qs = []
+    for ex in train:
+        q = ex[&quot;messages&quot;][1][&quot;content&quot;]
+        if any(near_duplicate(q, s) for s in seen_qs):
+            continue
+        seen_qs.append(q)
+        deduped.append(ex)
+    train = deduped
+
+    # ----------------------------
+    # Shuffle + split (80/20)
+    # ----------------------------
+    random.shuffle(train)
+    split = int(0.8 * len(train)) if len(train) else 0
+
+    (Path(out) / &quot;train.jsonl&quot;).write_text(
+        &quot;\n&quot;.join(json.dumps(x, ensure_ascii=False) for x in train[:split]),
+        encoding=&quot;utf-8&quot;
+    )
+    (Path(out) / &quot;val.jsonl&quot;).write_text(
+        &quot;\n&quot;.join(json.dumps(x, ensure_ascii=False) for x in train[split:]),
+        encoding=&quot;utf-8&quot;
+    )
+    (Path(out) / &quot;eval.jsonl&quot;).write_text(
+        &quot;\n&quot;.join(json.dumps(x, ensure_ascii=False) for x in evalq),
+        encoding=&quot;utf-8&quot;
+    )
+
+    print(f&quot;Wrote {len(train[:split])} train, {len(train[split:])} val, {len(evalq)} eval to {out}&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<hr />
+<h2 id="3-build-the-faiss-index-a-tiny-retriever-api">3) Build the FAISS index + a tiny retriever API</h2>
+<h3 id="ragbuild_indexpy"><code>rag/build_index.py</code></h3>
+<pre><code>import argparse
+import json
+import os
+from pathlib import Path
+from typing import Iterable, Tuple, Dict, Any, List
+
+from sentence_transformers import SentenceTransformer
+import faiss
+
+
+# -------- Helpers to render concise, model-friendly chunk text --------
+
+def _render_treatment_item(it: Dict[str, Any]) -&gt; str:
+    &quot;&quot;&quot;
+    Render a single treatment JSON object into a compact, informative snippet.
+    &quot;&quot;&quot;
+    keys_order = (
+        &quot;code&quot;, &quot;name&quot;, &quot;category&quot;,
+        &quot;duration_minutes&quot;, &quot;visits&quot;, &quot;price_band_inr&quot;,
+        &quot;indications&quot;, &quot;contraindications&quot;,
+        &quot;steps&quot;, &quot;aftercare&quot;, &quot;risks&quot;
+    )
+    lines: List[str] = []
+    for k in keys_order:
+        if k not in it:
+            continue
+        v = it[k]
+        if isinstance(v, (list, tuple)):
+            v = &quot;, &quot;.join(map(str, v))
+        lines.append(f&quot;{k}: {v}&quot;)
+    return &quot;\n&quot;.join(lines)
+
+
+def _render_markdown_snippet(text: str, max_lines: int = 8) -&gt; str:
+    &quot;&quot;&quot;
+    Take the heading and first few meaningful lines from markdown.
+    &quot;&quot;&quot;
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    # keep non-empty lines; prefer headings/bullets first
+    cleaned: List[str] = []
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            continue
+        cleaned.append(s)
+        if len(cleaned) &gt;= max_lines:
+            break
+    return &quot;\n&quot;.join(cleaned)
+
+
+def _render_recent_qa(obj: Dict[str, Any]) -&gt; str:
+    q = str(obj.get(&quot;q&quot;, &quot;&quot;)).strip()
+    a = str(obj.get(&quot;a&quot;, &quot;&quot;)).strip()
+    return f&quot;Q: {q}\nA: {a}&quot;
+
+
+# -------- Corpus iterator producing (text_for_embedding, meta_dict) --------
+
+def iter_docs(root: Path) -&gt; Iterable[Tuple[str, Dict[str, Any]]]:
+    &quot;&quot;&quot;
+    Yields (text, meta) pairs. meta includes:
+      - doc_id: file path relative to dataset root (e.g., 'policies/emergency.md', 'treatments.json')
+      - section: semantic section id (e.g., 'TX-SCALE-01') or 'full' for whole docs, or timestamp for jsonl
+      - path: doc_id#section (or doc_id when section == 'full')
+      - type: md | json | jsonl
+      - text: concise snippet for grounding (NOT the full document)
+    The 'text' is also used as the embedding input.
+    &quot;&quot;&quot;
+    # policies/*.md
+    for md in (root / &quot;policies&quot;).glob(&quot;*.md&quot;):
+        doc_id = f&quot;policies/{md.name}&quot;
+        full = md.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+        snippet = _render_markdown_snippet(full, max_lines=8)
+        meta = {
+            &quot;doc_id&quot;: doc_id,
+            &quot;section&quot;: &quot;full&quot;,
+            &quot;path&quot;: doc_id,
+            &quot;type&quot;: &quot;md&quot;,
+            &quot;text&quot;: snippet,
+        }
+        yield snippet, meta
+
+    # faq.md
+    faq_p = (root / &quot;faq.md&quot;)
+    if faq_p.exists():
+        faq_txt = faq_p.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+        snippet = _render_markdown_snippet(faq_txt, max_lines=10)
+        meta = {
+            &quot;doc_id&quot;: &quot;faq.md&quot;,
+            &quot;section&quot;: &quot;full&quot;,
+            &quot;path&quot;: &quot;faq.md&quot;,
+            &quot;type&quot;: &quot;md&quot;,
+            &quot;text&quot;: snippet,
+        }
+        yield snippet, meta
+
+    # treatments.json: one chunk per treatment, section = code (semantic id)
+    tr_p = (root / &quot;treatments.json&quot;)
+    if tr_p.exists():
+        treatments = json.loads(tr_p.read_text(encoding=&quot;utf-8&quot;))
+        if isinstance(treatments, list):
+            for it in treatments:
+                # prefer semantic section id 'code' (e.g., TX-SCALE-01)
+                code = it.get(&quot;code&quot;) or &quot;item&quot;
+                snippet = _render_treatment_item(it)
+                meta = {
+                    &quot;doc_id&quot;: &quot;treatments.json&quot;,
+                    &quot;section&quot;: str(code),
+                    &quot;path&quot;: f&quot;treatments.json#{code}&quot;,
+                    &quot;type&quot;: &quot;json&quot;,
+                    &quot;text&quot;: snippet,
+                }
+                yield snippet, meta
+
+    # recent_queries.jsonl: optional, include as weak signals (can downweight later)
+    rq_p = (root / &quot;recent_queries.jsonl&quot;)
+    if rq_p.exists():
+        for line in rq_p.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).splitlines():
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            snippet = _render_recent_qa(obj)
+            ts = str(obj.get(&quot;ts&quot;, &quot;na&quot;))
+            meta = {
+                &quot;doc_id&quot;: &quot;recent_queries.jsonl&quot;,
+                &quot;section&quot;: ts,
+                &quot;path&quot;: f&quot;recent_queries.jsonl:{ts}&quot;,
+                &quot;type&quot;: &quot;jsonl&quot;,
+                &quot;text&quot;: snippet,
+            }
+            yield snippet, meta
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(&quot;--root&quot;, required=True, help=&quot;datasets/clinic&quot;)
+    ap.add_argument(&quot;--outdir&quot;, required=True, help=&quot;artifacts/rag&quot;)
+    args = ap.parse_args()
+
+    root = Path(args.root)
+    out = Path(args.outdir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    # Build corpus
+    texts: List[str] = []
+    metas: List[Dict[str, Any]] = []
+    for txt, meta in iter_docs(root):
+        # keep text modest to avoid huge meta and keep embeddings focused
+        txt_capped = txt.strip()[:1500]
+        texts.append(txt_capped)
+        # store the same snippet in meta (so retriever can return it directly)
+        meta = dict(meta)
+        meta[&quot;text&quot;] = txt_capped
+        metas.append(meta)
+
+    # Embed and index
+    model_name = &quot;sentence-transformers/all-MiniLM-L6-v2&quot;
+    model = SentenceTransformer(model_name)
+    embs = model.encode(
+        texts,
+        convert_to_numpy=True,
+        show_progress_bar=True,
+        normalize_embeddings=True,
+    )
+    index = faiss.IndexFlatIP(embs.shape[1])
+    index.add(embs)
+
+    # Persist
+    faiss.write_index(index, str(out / &quot;index.faiss&quot;))
+    (out / &quot;meta.json&quot;).write_text(
+        json.dumps(metas, ensure_ascii=False, indent=2),
+        encoding=&quot;utf-8&quot;,
+    )
+    print(f&quot;Indexed {len(texts)} chunks → {out}&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<h3 id="ragretrieverpy"><code>rag/retriever.py</code></h3>
+<pre><code>import os
+import json
+from pathlib import Path
+from typing import List, Optional, Tuple, Any
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+BACKEND   = os.getenv(&quot;BACKEND&quot;, &quot;dense&quot;)  # &quot;sparse&quot; or &quot;dense&quot;
+INDEX_PATH = Path(os.getenv(&quot;INDEX_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/index.faiss&quot;))
+META_PATH  = Path(os.getenv(&quot;META_PATH&quot;,  &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/meta.json&quot;))
+MODEL_DIR  = os.getenv(&quot;MODEL_DIR&quot;)  # optional for dense
+MODEL_NAME = os.getenv(&quot;MODEL_NAME&quot;, &quot;sentence-transformers/all-MiniLM-L6-v2&quot;)
+
+app = FastAPI(title=f&quot;Atharva Retriever ({BACKEND})&quot;)
+
+class SearchRequest(BaseModel):
+    query: str
+    k: int = 4
+
+_ready_reason = &quot;starting&quot;
+_model = None; _index = None; _meta: List[dict] = []
+_vec = None; _X = None  # sparse objects
+
+
+# ------------------ Utils ------------------
+
+def _normalize_meta_loaded(data: Any) -&gt; List[dict]:
+    &quot;&quot;&quot;
+    Accepts various shapes of meta.json and returns a list of entries.
+    Supported:
+      - list[dict]
+      - {&quot;items&quot;: [...]}  (common pattern)
+      - {&quot;hits&quot;: [...]}   (fallback)
+    &quot;&quot;&quot;
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        if &quot;items&quot; in data and isinstance(data[&quot;items&quot;], list):
+            return data[&quot;items&quot;]
+        if &quot;hits&quot; in data and isinstance(data[&quot;hits&quot;], list):
+            return data[&quot;hits&quot;]
+    raise ValueError(&quot;META_PATH must contain a list or a dict with 'items'/'hits'.&quot;)
+
+
+def _parse_doc_and_section(path: Optional[str]) -&gt; Tuple[str, Optional[str]]:
+    &quot;&quot;&quot;
+    Parse labels from meta.path:
+      - 'treatments.json#0' -&gt; ('treatments.json', '0')
+      - 'faq.md'            -&gt; ('faq.md', None)
+      - 'policies/emergency.md' -&gt; ('policies/emergency.md', None)
+    &quot;&quot;&quot;
+    if not path:
+        return &quot;unknown&quot;, None
+    if &quot;#&quot; in path:
+        d, s = path.split(&quot;#&quot;, 1)
+        return d, s
+    return path, None
+
+
+def _extract_text(m: dict) -&gt; Optional[str]:
+    &quot;&quot;&quot;
+    Try common keys for stored chunk text.
+    &quot;&quot;&quot;
+    return m.get(&quot;text&quot;) or m.get(&quot;chunk&quot;) or m.get(&quot;content&quot;)
+
+
+def _enrich_hit(idx: int, score: float) -&gt; dict:
+    &quot;&quot;&quot;
+    Build a single enriched hit from meta[idx].
+    &quot;&quot;&quot;
+    if idx &lt; 0 or idx &gt;= len(_meta):
+        # Guard against out-of-range
+        doc_id, section, path, typ, txt = &quot;unknown&quot;, None, None, None, None
+    else:
+        m   = _meta[idx] or {}
+        path = m.get(&quot;path&quot;)
+        typ  = m.get(&quot;type&quot;)
+        doc_id, section = _parse_doc_and_section(path)
+        txt = _extract_text(m)
+
+    hit = {
+        &quot;score&quot;: float(score),
+        &quot;meta&quot;: {
+            &quot;doc_id&quot;: doc_id,
+            &quot;section&quot;: section,
+            &quot;path&quot;: path,
+            &quot;type&quot;: typ,
+        },
+    }
+    if txt:
+        hit[&quot;text&quot;] = txt
+    return hit
+
+
+# ------------------ Loaders ------------------
+
+def _load_dense():
+    global _model, _index, _meta
+    try:
+        import faiss
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer(MODEL_DIR) if (MODEL_DIR and Path(MODEL_DIR).exists()) else SentenceTransformer(MODEL_NAME)
+        _index = faiss.read_index(str(INDEX_PATH))
+        _meta = _normalize_meta_loaded(json.loads(META_PATH.read_text(encoding=&quot;utf-8&quot;)))
+        return None
+    except Exception as e:
+        return f&quot;dense load error: {e}&quot;
+
+
+def _load_sparse():
+    global _vec, _X, _meta
+    try:
+        import joblib
+        from scipy import sparse
+        vec_p = Path(os.getenv(&quot;VEC_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/tfidf_vectorizer.joblib&quot;))
+        X_p   = Path(os.getenv(&quot;MAT_PATH&quot;, &quot;/mnt/project/atharva-dental-assistant/artifacts/rag/tfidf_matrix.npz&quot;))
+        _vec = joblib.load(vec_p)
+        _X = sparse.load_npz(X_p)  # assume rows L2-normalized; dot == cosine
+        _meta = _normalize_meta_loaded(json.loads(META_PATH.read_text(encoding=&quot;utf-8&quot;)))
+        return None
+    except Exception as e:
+        return f&quot;sparse load error: {e}&quot;
+
+
+@app.on_event(&quot;startup&quot;)
+def startup():
+    global _ready_reason
+    _ready_reason = _load_sparse() if BACKEND == &quot;sparse&quot; else _load_dense()
+
+
+# ------------------ Endpoints ------------------
+
+@app.get(&quot;/health&quot;)
+def health():
+    return {&quot;ok&quot;: True}
+
+
+@app.get(&quot;/ready&quot;)
+def ready():
+    return {&quot;ready&quot;: _ready_reason is None, &quot;reason&quot;: _ready_reason}
+
+
+@app.post(&quot;/reload&quot;)
+def reload_index():
+    global _ready_reason
+    _ready_reason = _load_sparse() if BACKEND == &quot;sparse&quot; else _load_dense()
+    if _ready_reason is not None:
+        raise HTTPException(status_code=503, detail=_ready_reason)
+    return {&quot;reloaded&quot;: True}
+
+
+@app.post(&quot;/search&quot;)
+def search(req: SearchRequest):
+    if _ready_reason is not None:
+        raise HTTPException(status_code=503, detail=_ready_reason)
+
+    k = max(1, min(int(req.k), 20))
+
+    if BACKEND == &quot;sparse&quot;:
+        import numpy as np
+        q = _vec.transform([req.query])
+        scores = (_X @ q.T).toarray().ravel()  # cosine since rows normalized
+        if scores.size == 0:
+            return {&quot;hits&quot;: []}
+        # get top-k indices by score desc
+        k_eff = min(k, scores.size)
+        top = np.argpartition(-scores, range(k_eff))[:k_eff]
+        top = top[np.argsort(-scores[top])]
+        hits = [
+            _enrich_hit(int(i), float(scores[int(i)]))
+            for i in top
+            if scores[int(i)] &gt; 0
+        ]
+        return {&quot;hits&quot;: hits}
+
+    # dense
+    import faiss
+    import numpy as np
+    v = _model.encode([req.query], normalize_embeddings=True)  # IP ~ cosine
+    D, I = _index.search(v.astype(&quot;float32&quot;), k)
+    hits = []
+    for score, idx in zip(D[0].tolist(), I[0].tolist()):
+        if idx == -1:
+            continue
+        hits.append(_enrich_hit(int(idx), float(score)))
+    return {&quot;hits&quot;: hits}
+</code></pre>
+<hr />
+<h2 id="4-kubernetes-manifests-jobs-deployment">4) Kubernetes manifests (Jobs + Deployment)</h2>
+<h3 id="k8s10-datajob-generate-datayaml"><code>k8s/10-data/job-generate-data.yaml</code></h3>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: atharva-generate-data
+  namespace: atharva-ml
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: synth
+        image: python:3.11-slim
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            pip install --no-cache-dir sentence-transformers==2.7.0
+            python /mnt/project/atharva-dental-assistant/tools/synth_data.py \
+              --clinic Pune --currency INR \
+              --treatments /mnt/project/atharva-dental-assistant/datasets/clinic/treatments.json \
+              --policies /mnt/project/atharva-dental-assistant/datasets/clinic/policies/*.md \
+              --faq /mnt/project/atharva-dental-assistant/datasets/clinic/faq.md \
+              --recent /mnt/project/atharva-dental-assistant/datasets/clinic/recent_queries.jsonl \
+              --out /mnt/project/atharva-dental-assistant/datasets/training
+        volumeMounts:
+        - name: host
+          mountPath: /mnt/project
+      volumes:
+      - name: host
+        hostPath: { path: /mnt/project, type: Directory }
+</code></pre>
+<h3 id="k8s10-datajob-build-indexyaml"><code>k8s/10-data/job-build-index.yaml</code></h3>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: atharva-build-index
+  namespace: atharva-ml
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: index
+        image: public.ecr.aws/docker/library/python:3.11-slim
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            set -euo pipefail
+            export HOME=/mnt/project
+            VENV=/mnt/project/.venv-build
+            ROOT=/mnt/project/atharva-dental-assistant/datasets/clinic
+            OUT=/mnt/project/atharva-dental-assistant/artifacts/rag
+            mkdir -p &quot;$OUT&quot;
+            python -m venv &quot;$VENV&quot;
+            . &quot;$VENV/bin/activate&quot;
+            python -m pip install -U pip
+            python -m pip install --no-cache-dir &quot;numpy==1.26.4&quot; &quot;scipy==1.10.1&quot; &quot;scikit-learn==1.3.2&quot; &quot;joblib==1.3.2&quot;
+
+            python - &lt;&lt; 'PY'
+            from pathlib import Path
+            import json, re
+            from typing import Any, Dict, List, Tuple
+            import numpy as np
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from scipy import sparse
+            import joblib
+
+            ROOT   = Path(&quot;/mnt/project/atharva-dental-assistant/datasets/clinic&quot;)
+            OUTDIR = Path(&quot;/mnt/project/atharva-dental-assistant/artifacts/rag&quot;)
+            OUTDIR.mkdir(parents=True, exist_ok=True)
+
+            # ---- helpers to render concise snippets ----
+            def render_markdown_snippet(txt: str, max_lines: int = 8) -&gt; str:
+                lines = [ln.strip() for ln in txt.splitlines()]
+                lines = [ln for ln in lines if ln]
+                return &quot;\n&quot;.join(lines[:max_lines])
+
+            def render_treatment_item(it: Dict[str, Any]) -&gt; str:
+                keys = (&quot;code&quot;,&quot;name&quot;,&quot;category&quot;,&quot;duration_minutes&quot;,&quot;visits&quot;,&quot;price_band_inr&quot;,
+                        &quot;indications&quot;,&quot;steps&quot;,&quot;aftercare&quot;,&quot;risks&quot;)
+                parts = []
+                for k in keys:
+                    if k in it:
+                        v = it[k]
+                        if isinstance(v, (list, tuple)):
+                            v = &quot;, &quot;.join(map(str, v))
+                        parts.append(f&quot;{k}: {v}&quot;)
+                return &quot;\n&quot;.join(parts)
+
+            def render_recent_qa(obj: Dict[str, Any]) -&gt; str:
+                q = str(obj.get(&quot;q&quot;,&quot;&quot;)).strip()
+                a = str(obj.get(&quot;a&quot;,&quot;&quot;)).strip()
+                return f&quot;Q: {q}\nA: {a}&quot;
+
+            texts: List[str] = []
+            meta:  List[Dict[str, Any]] = []
+
+            # policies/*.md
+            for p in sorted((ROOT/&quot;policies&quot;).glob(&quot;*.md&quot;)):
+                t = p.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+                snip = render_markdown_snippet(t, max_lines=8)
+                snip = snip.strip()[:1500]
+                doc_id = f&quot;policies/{p.name}&quot;
+                texts.append(snip)
+                meta.append({
+                    &quot;doc_id&quot;: doc_id,
+                    &quot;section&quot;: &quot;full&quot;,
+                    &quot;path&quot;: doc_id,
+                    &quot;type&quot;: &quot;md&quot;,
+                    &quot;text&quot;: snip,
+                })
+
+            # faq.md
+            faq = ROOT/&quot;faq.md&quot;
+            if faq.exists():
+                t = faq.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+                snip = render_markdown_snippet(t, max_lines=10).strip()[:1500]
+                texts.append(snip)
+                meta.append({
+                    &quot;doc_id&quot;: &quot;faq.md&quot;,
+                    &quot;section&quot;: &quot;full&quot;,
+                    &quot;path&quot;: &quot;faq.md&quot;,
+                    &quot;type&quot;: &quot;md&quot;,
+                    &quot;text&quot;: snip,
+                })
+
+            # treatments.json (semantic section id = code)
+            tr = ROOT/&quot;treatments.json&quot;
+            if tr.exists():
+                items = json.loads(tr.read_text(encoding=&quot;utf-8&quot;))
+                if isinstance(items, list):
+                    for it in items:
+                        code = it.get(&quot;code&quot;) or &quot;item&quot;
+                        snip = render_treatment_item(it).strip()[:1500]
+                        texts.append(snip)
+                        meta.append({
+                            &quot;doc_id&quot;: &quot;treatments.json&quot;,
+                            &quot;section&quot;: str(code),
+                            &quot;path&quot;: f&quot;treatments.json#{code}&quot;,
+                            &quot;type&quot;: &quot;json&quot;,
+                            &quot;text&quot;: snip,
+                        })
+
+            # recent_queries.jsonl (optional, weak source)
+            rq = ROOT/&quot;recent_queries.jsonl&quot;
+            if rq.exists():
+                for line in rq.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).splitlines():
+                    line=line.strip()
+                    if not line: continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    ts = str(obj.get(&quot;ts&quot;,&quot;na&quot;))
+                    snip = render_recent_qa(obj).strip()[:1500]
+                    texts.append(snip)
+                    meta.append({
+                        &quot;doc_id&quot;: &quot;recent_queries.jsonl&quot;,
+                        &quot;section&quot;: ts,
+                        &quot;path&quot;: f&quot;recent_queries.jsonl:{ts}&quot;,
+                        &quot;type&quot;: &quot;jsonl&quot;,
+                        &quot;text&quot;: snip,
+                    })
+
+            if not texts:
+                raise SystemExit(f&quot;No ingestible files in {ROOT}&quot;)
+
+            # Build sparse TF-IDF
+            vec = TfidfVectorizer(
+                lowercase=True,
+                ngram_range=(1,2),
+                max_df=0.9,
+                min_df=1,
+                norm=&quot;l2&quot;,
+            )
+            X = vec.fit_transform(texts).astype(np.float32)
+
+            # Save artifacts
+            joblib.dump(vec, OUTDIR/&quot;tfidf_vectorizer.joblib&quot;)
+            sparse.save_npz(OUTDIR/&quot;tfidf_matrix.npz&quot;, X)
+            (OUTDIR/&quot;meta.json&quot;).write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2),
+                encoding=&quot;utf-8&quot;
+            )
+
+            print(&quot;TF-IDF built:&quot;, X.shape, &quot;saved to&quot;, OUTDIR)
+            PY
+
+            ls -lah &quot;$OUT&quot; &amp;&amp; wc -c &quot;$OUT&quot;/tfidf_* &quot;$OUT&quot;/meta.json
+        volumeMounts:
+        - name: host
+          mountPath: /mnt/project
+      volumes:
+      - name: host
+        hostPath: { path: /mnt/project, type: Directory }
+</code></pre>
+<h3 id="k8s40-servedeploy-retrieveryaml"><code>k8s/40-serve/deploy-retriever.yaml</code></h3>
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atharva-retriever
+  namespace: atharva-ml
+  labels: { app: retriever }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: retriever }
+  template:
+    metadata:
+      labels: { app: retriever }
+    spec:
+      terminationGracePeriodSeconds: 20
+      containers:
+      - name: api
+        image: public.ecr.aws/docker/library/python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        workingDir: /mnt/project/atharva-dental-assistant
+        env:
+        - { name: HOME, value: /mnt/project }
+        - { name: VIRTUAL_ENV, value: /opt/venv }   # venv on emptyDir
+        - { name: PATH, value: /opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin }
+        - { name: PYTHONPATH, value: /mnt/project/atharva-dental-assistant }
+        - { name: HF_HOME, value: /mnt/project/.hf_cache }
+        - { name: TOKENIZERS_PARALLELISM, value: &quot;false&quot; }
+        - { name: INDEX_PATH, value: /mnt/project/atharva-dental-assistant/artifacts/rag/index.faiss }
+        - { name: META_PATH,  value: /mnt/project/atharva-dental-assistant/artifacts/rag/meta.json }
+        - { name: MODEL_NAME, value: sentence-transformers/all-MiniLM-L6-v2 }
+        - { name: BACKEND, value: sparse }          # using sparse now
+        - { name: PIP_DISABLE_PIP_VERSION_CHECK, value: &quot;1&quot; }
+        - { name: PIP_NO_CACHE_DIR, value: &quot;1&quot; }
+        - { name: PIP_CACHE_DIR, value: /opt/tmp/pip }
+        - { name: TMPDIR, value: /opt/tmp }
+        - { name: PIP_ONLY_BINARY, value: &quot;:all:&quot; } # ← do NOT build from source
+        ports:
+        - { name: http, containerPort: 8001 }
+        command: [&quot;bash&quot;,&quot;-lc&quot;]
+        args:
+          - |
+            set -euo pipefail
+            python -m venv &quot;$VIRTUAL_ENV&quot;
+            . &quot;$VIRTUAL_ENV/bin/activate&quot;
+            python -m pip install --upgrade pip
+            if [ &quot;${BACKEND:-sparse}&quot; = &quot;sparse&quot; ]; then
+              # Pure sparse stack (forces wheels only; will fail if a wheel is unavailable for your arch)
+              python -m pip install --only-binary=:all: \
+                &quot;numpy==1.26.4&quot; &quot;scipy==1.10.1&quot; &quot;scikit-learn==1.3.2&quot; joblib==1.4.2 \
+                fastapi==0.112.2 uvicorn==0.30.6
+            else
+              python -m pip install --only-binary=:all: \
+                &quot;numpy==1.26.4&quot; sentence-transformers==2.7.0 &quot;faiss-cpu==1.7.4&quot; \
+                fastapi==0.112.2 uvicorn==0.30.6
+            fi
+            uvicorn rag.retriever:app --host 0.0.0.0 --port 8001
+        resources:
+          requests:
+            cpu: &quot;500m&quot;
+            memory: &quot;1Gi&quot;
+            ephemeral-storage: &quot;2Gi&quot;   # ↑ reserve more scratch
+          limits:
+            cpu: &quot;2&quot;
+            memory: &quot;4Gi&quot;
+            ephemeral-storage: &quot;6Gi&quot;   # ↑ allow larger wheels
+        volumeMounts:
+        - { name: host,  mountPath: /mnt/project }
+        - { name: venv,  mountPath: /opt/venv }
+        - { name: tmp,   mountPath: /opt/tmp }
+      volumes:
+      - name: host
+        hostPath: { path: /mnt/project, type: Directory }
+      - name: venv
+        emptyDir:
+          sizeLimit: 3Gi              # ↑ allow the venv to exist
+      - name: tmp
+        emptyDir:
+          sizeLimit: 3Gi              # ↑ pip/tmp workspace
+</code></pre>
+<h3 id="k8s40-servesvc-retrieveryaml"><code>k8s/40-serve/svc-retriever.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: atharva-retriever
+  namespace: atharva-ml
+spec:
+  type: NodePort
+  selector: { app: retriever }
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    nodePort: 30100
+</code></pre>
+<hr />
+<h2 id="5-helper-scripts-local-convenience">5) Helper scripts (local convenience)</h2>
+<h3 id="scriptsgenerate_datash"><code>scripts/generate_data.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/10-data/job-generate-data.yaml
+kubectl -n atharva-ml wait --for=condition=complete job/atharva-generate-data --timeout=300s
+kubectl -n atharva-ml logs job/atharva-generate-data
+</code></pre>
+<h3 id="scriptsbuild_indexsh"><code>scripts/build_index.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/10-data/job-build-index.yaml
+kubectl -n atharva-ml wait --for=condition=complete job/atharva-build-index --timeout=300s
+kubectl -n atharva-ml logs job/atharva-build-index
+</code></pre>
+<h3 id="scriptsdeploy_retrieversh"><code>scripts/deploy_retriever.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+kubectl apply -f k8s/40-serve/deploy-retriever.yaml
+kubectl apply -f k8s/40-serve/svc-retriever.yaml
+kubectl -n atharva-ml rollout status deploy/atharva-retriever --timeout=180s
+kubectl -n atharva-ml get svc/atharva-retriever
+</code></pre>
+<blockquote>
+<p><strong>Windows (PowerShell)</strong>: you can run the same <code>kubectl apply</code>/<code>wait</code> commands directly; or convert the .sh scripts to <code>.ps1</code> with the same lines minus the <code>set -euo pipefail</code>.</p>
+</blockquote>
+<hr />
+<h2 id="6-run-the-lab">6) Run the lab</h2>
+<p>From the repo root (which lives under <code>./project/atharva-dental-assistant</code> on your host):</p>
+<pre><code># 1) Generate training/eval datasets
+bash scripts/generate_data.sh
+
+# validate 
+kubectl get pods
+ls datasets/training
+
+# 2) Build FAISS index
+bash scripts/build_index.sh
+
+# validate
+kubectl get pods 
+ls artifacts/rag
+
+# 3) Deploy retriever API
+bash scripts/deploy_retriever.sh
+
+# validate
+kubectl get all
+kubectl logs -f -l &quot;app=retriever&quot; 
+</code></pre>
+<p>Send some requests to the retriever to validate if RAG is working</p>
+<pre><code>
+# Is retriever healthy ?
+curl -s http://127.0.0.1:30100/health
+
+# Reload once after rebuilding the index to clear any cached startup error
+curl -s -X POST http://127.0.0.1:30100/reload | jq .
+
+
+# 0) Ready before search?
+curl -s http://127.0.0.1:30100/ready | jq .
+
+
+# 1) Run a query and save it
+curl -s -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;How long does scaling take?&quot;,&quot;k&quot;:4}' | tee /tmp/r.json | jq .
+
+
+# 2) hits length &lt;= k
+jq '(.hits|length) &lt;= 4' /tmp/r.json
+
+# 3) every hit has score+meta
+jq -e 'all(.hits[]; has(&quot;score&quot;) and has(&quot;meta&quot;))' /tmp/r.json
+
+# 4) scores are sorted non-increasing
+jq -e '[.hits[].score] as $s | reduce range(1; $s|length) as $i (true; . and ($s[$i] &lt;= $s[$i-1]))' /tmp/r.json
+
+# 5) score range sanity
+# use ONE of these depending on backend:
+#   sparse TF-IDF: scores in [0,1]
+jq -e 'all(.hits[].score; .&gt;=0 and .&lt;=1)' /tmp/r.json
+#   dense cosine/IP (normalized): scores in [-1,1]
+# jq -e 'all(.hits[].score; .&gt;=-1 and .&lt;=1)' /tmp/r.json
+
+
+# 6) idempotence (same request twice → same top doc paths)
+curl -s -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;How long does scaling take?&quot;,&quot;k&quot;:4}' \
+  | jq '[.hits[].meta.path]' &gt; /tmp/r2.json
+diff -u /tmp/r2.json &lt;(jq '[.hits[].meta.path]' /tmp/r.json) || true
+
+
+# 8) latency snapshot (should be sub-second after warmup for small corpora)
+curl -o /dev/null -s -w 'time_total=%{time_total}\n' \
+  -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;root canal&quot;,&quot;k&quot;:4}'
+
+# Test a nonsense query. Should return empty results
+curl -s -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;zzzzzz qwerty asdf&quot;,&quot;k&quot;:4}' | jq '.hits'
+
+# Search for a specific policies from the dataset 
+curl -s -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;Whats the currency you accept?&quot;,&quot;k&quot;:4}'
+
+curl -s -X POST http://127.0.0.1:30100/search \
+  -H 'content-type: application/json' \
+  -d '{&quot;query&quot;:&quot;Are you open on Sundays?&quot;,&quot;k&quot;:4}'
+
+</code></pre>
+<p>You should see top hits with <code>doc_id</code> like <code>treatments.json#TX-SCALE-01</code> and policies.</p>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Created <strong>synthetic, Pune/INR-aware</strong> clinic data (treatments, policies, FAQs, recent queries).</p>
+</li>
+<li>
+<p>Built a <strong>FAISS</strong> index (CPU) with <strong>MiniLM-L6-v2</strong> embeddings.</p>
+</li>
+<li>
+<p>Deployed a <strong>Retriever API</strong> on Kubernetes that returns top-k hits w/ metadata.</p>
+</li>
+<li>
+<p>Proved the <strong>RAG backbone</strong> works before any model fine-tuning.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab00/" class="btn btn-neutral float-left" title="Lab 00 - Setting up Kubernetes Environment"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../lab02/" class="btn btn-neutral float-right" title="Lab 02 - Fine-tuning a Model with LoRA">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab00/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../lab02/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

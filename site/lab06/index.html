@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://llmops-tutorial.schoolofdevops.com/lab06/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 06 - Autoscaling vLLM + RAG + Chat API - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 06 - Autoscaling vLLM + RAG + Chat API";
+        var mkdocs_page_input_path = "lab06.md";
+        var mkdocs_page_url = "/lab06/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#goal">Goal</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#what-youll-add">What you’ll add</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#0-pre-reqs-install-once">0) Pre-reqs (install once)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#a-metrics-server-hpa-on-cpu-needs-this">A) metrics-server (HPA on CPU needs this)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#b-add-resource-spec-to-chat-api">B) Add Resource Spec to Chat API</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-hpa-on-cpu-chat-api">1) HPA on CPU (Chat API)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#wait-till-you-see-the-metrics-appear-and-the-minimum-pods-set-to-2-as-per-hpa-spec-to-proceed-with-load-test-next">Wait till you see the metrics appear and the minimum pods set to 2 as per HPA spec to proceed with load test next.</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-vpa-recommendations-for-vllm-retriever">3) VPA (recommendations for vLLM &amp; Retriever)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-load-generator-to-trigger-scaling">5) Load generator (to trigger scaling)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#c-keda-for-event-driven-scale-on-prometheus">C) KEDA (for event-driven scale on Prometheus)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-keda-scaledobject-prometheus-trigger">4) KEDA ScaledObject (Prometheus trigger)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-load-generator-to-trigger-scaling_1">5) Load generator (to trigger scaling)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#tips-gotchas">Tips / Gotchas</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#lab-summary">Lab Summary</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab08/">Lab 08 - Automating LLM pipelines with Argo Workflows</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 06 - Autoscaling vLLM + RAG + Chat API</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab06.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-6-autoscaling-vllm-rag-chat-api">Lab 6 — Autoscaling vLLM + RAG + Chat API</h1>
+<h2 id="goal">Goal</h2>
+<ul>
+<li>
+<p><strong>HPA</strong>: scale Chat API on CPU (simple), and (optionally) on <strong>Prometheus RPS</strong> via Prometheus Adapter.</p>
+</li>
+<li>
+<p><strong>VPA</strong>: get resource <strong>recommendations</strong> for vLLM &amp; Retriever, then (optionally) apply.</p>
+</li>
+<li>
+<p><strong>KEDA</strong>: event-driven <strong>Prometheus</strong> trigger (e.g., RPS per pod).</p>
+</li>
+</ul>
+<blockquote>
+<p>Works with Labs 0–5 (Prometheus/Grafana already installed).</p>
+</blockquote>
+<hr />
+<h2 id="what-youll-add">What you’ll add</h2>
+<pre><code>atharva-dental-assistant/
+├─ k8s/
+│  └─ 60-autoscale/
+│     ├─ metrics-server-values.yaml
+│     ├─ hpa-chat-api-cpu.yaml
+│     ├─ adapter-values.yaml           # Prometheus Adapter (external/custom metrics)
+│     ├─ hpa-chat-api-rps.yaml         # HPA using external metrics (RPS)
+│     ├─ vpa-vllm.yaml
+│     ├─ vpa-retriever.yaml
+│     ├─ keda-values.yaml
+│     ├─ keda-scaledobject-chat.yaml   # Prometheus trigger -&gt; scale Chat API
+│     └─ loadgen-job.yaml              # simple load generator
+└─ scripts/
+   └─ deploy_autoscaling.sh
+</code></pre>
+<p>Begin the la by creating the directory </p>
+<pre><code>cd project/atharva-dental-assistant
+mkdir k8s/60-autoscale/
+</code></pre>
+<hr />
+<h2 id="0-pre-reqs-install-once">0) Pre-reqs (install once)</h2>
+<h3 id="a-metrics-server-hpa-on-cpu-needs-this">A) metrics-server (HPA on CPU needs this)</h3>
+<p>Kind often lacks it by default. you can check it by running the following </p>
+<pre><code>kubectl top pod
+
+kubectl top node
+</code></pre>
+<p>If you do not see the metrics but <code>error: Metrics API not available</code>, you need to install this component. </p>
+<pre><code># switch to home dir. alternately you pick a path
+cd ~
+git clone https://github.com/schoolofdevops/metrics-server.git
+kubectl apply -k metrics-server/manifests/overlays/release
+</code></pre>
+<p>validate:</p>
+<pre><code>kubectl top pod
+
+kubectl top node
+</code></pre>
+<p>[sample output]</p>
+<pre><code>➜  kubernetes kubectl top node
+NAME                        CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)
+llmops-kind-control-plane   285m         4%       1344Mi          13%
+llmops-kind-worker          82m          1%       2721Mi          27%
+llmops-kind-worker2         110m         1%       1377Mi          13%
+➜  kubernetes kubectl top pods
+NAME                                      CPU(cores)   MEMORY(bytes)
+atharva-retriever-75b5996b54-w5vgc        4m           98Mi
+atharva-vllm-predictor-64845bf646-dcdmf   14m          2117Mi
+</code></pre>
+<h3 id="b-add-resource-spec-to-chat-api">B) Add Resource Spec to Chat API</h3>
+<p>Step 2: Add Resource Spec to the Pod </p>
+<p><code>File: k8s/40-serve/deploy-chat-api.yaml</code></p>
+<pre><code>spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: atharva-chat-api }
+  template:
+    metadata:
+      labels: { app: atharva-chat-api }
+    spec:
+      containers:
+      - name: api
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: &quot;50m&quot;
+            memory: &quot;64Mi&quot;
+          limits:
+            cpu: &quot;250m&quot;
+            memory: &quot;256Mi&quot;
+</code></pre>
+<pre><code>kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+</code></pre>
+<p>validate </p>
+<pre><code>kubectl describe pod -n atharva-app -l &quot;app=atharva-chat-api&quot;
+</code></pre>
+<p>Look for the container section where you should see the resource spec added. </p>
+<hr />
+<h2 id="1-hpa-on-cpu-chat-api">1) HPA on <strong>CPU</strong> (Chat API)</h2>
+<p><code>k8s/60-autoscale/hpa-chat-api.yaml</code></p>
+<pre><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-chat-api
+  namespace: atharva-app
+spec:
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: ContainerResource
+      containerResource:
+        name: cpu
+        container: api  # change this as per actual container name
+        target:
+          type: Utilization
+          averageUtilization: 50
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atharva-chat-api
+  behavior:
+    scaleDown:
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 120
+      - type: Percent
+        value: 25
+        periodSeconds: 120
+      stabilizationWindowSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 45
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 2
+        periodSeconds: 15
+      selectPolicy: Max
+</code></pre>
+<p>Apply:</p>
+<pre><code>kubectl apply -f k8s/60-autoscale/hpa-chat-api.yaml
+kubectl -n atharva-app get hpa hpa-chat-api -w
+</code></pre>
+<p>[expected output]</p>
+<pre><code>NAME           REFERENCE                     TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+hpa-chat-api   Deployment/atharva-chat-api   cpu: &lt;unknown&gt;/50%   2         6         2          2m54s
+hpa-chat-api   Deployment/atharva-chat-api   cpu: 10%/50%         2         6         2          3m
+
+</code></pre>
+<h2 id="wait-till-you-see-the-metrics-appear-and-the-minimum-pods-set-to-2-as-per-hpa-spec-to-proceed-with-load-test-next">Wait till you see the metrics appear and the minimum pods set to 2 as per HPA spec to proceed with load test next.</h2>
+<h2 id="3-vpa-recommendations-for-vllm-retriever">3) VPA (recommendations for vLLM &amp; Retriever)</h2>
+<p>Install the VPA components (once):</p>
+<pre><code>git clone https://github.com/kubernetes/autoscaler.git
+cd autoscaler/vertical-pod-autoscaler/ 
+
+# deploy vpa 
+./hack/vpa-up.sh
+</code></pre>
+<p>Recommend-only mode first:</p>
+<p><code>k8s/60-autoscale/vpa-vllm.yaml</code></p>
+<pre><code>apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: vpa-vllm
+  namespace: atharva-ml
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atharva-vllm-predictor
+  updatePolicy:
+    updateMode: &quot;Off&quot;     # &quot;Auto&quot; to apply automatically
+</code></pre>
+<p><code>k8s/60-autoscale/vpa-retriever.yaml</code></p>
+<pre><code>apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: vpa-retriever
+  namespace: atharva-ml
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atharva-retriever
+  updatePolicy:
+    updateMode: &quot;Off&quot;
+</code></pre>
+<p>Apply:</p>
+<pre><code>kubectl apply -f k8s/60-autoscale/vpa-vllm.yaml
+kubectl apply -f k8s/60-autoscale/vpa-retriever.yaml
+# After some traffic:
+kubectl -n atharva-ml describe vpa vpa-vllm | sed -n '1,200p'
+kubectl -n atharva-ml describe vpa vpa-retriever | sed -n '1,200p'
+</code></pre>
+<hr />
+<h2 id="5-load-generator-to-trigger-scaling">5) Load generator (to trigger scaling)</h2>
+<p>A tiny <strong>Job</strong> that hammers the Chat API. Adjust <code>CONCURRENCY</code> &amp; <code>REQUESTS</code>.</p>
+<p><code>k8s/60-autoscale/loadgen-job.yaml</code></p>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: loadgen-job-
+  namespace: atharva-app
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: hey
+        image: schoolofdevops/hey:latest
+        command: [&quot;hey&quot;]
+        args:
+          - &quot;-z&quot;
+          - &quot;4m&quot;                                 # duration
+          - &quot;-q&quot;
+          - &quot;50&quot;                                 # target QPS
+          - &quot;-c&quot;
+          - &quot;25&quot;                                # concurrency
+          - &quot;-m&quot;
+          - &quot;POST&quot;
+          - &quot;-H&quot;
+          - &quot;Content-Type: application/json&quot;
+          - &quot;-d&quot;
+          - '{&quot;question&quot;:&quot;Do you accept UPI Payments?&quot;,&quot;k&quot;:4,&quot;max_tokens&quot;:160}'
+          - &quot;http://atharva-chat-api.atharva-app.svc.cluster.local:8080/chat&quot;
+</code></pre>
+<p>Run it:</p>
+<pre><code>kubectl create -f k8s/60-autoscale/loadgen-job.yaml
+kubectl -n atharva-app get jobs 
+kubectl -n atharva-app logs -f job/loadgen-job-xxxx
+</code></pre>
+<p>Watch scaling [in a new terminal]:</p>
+<pre><code># Watch Horizontal Scling with HPA
+kubectl -n atharva-app get hpa hpa-chat-api -w
+
+# Check Resource Scaling Recommendations with VPA 
+kubectl get vpa -w
+
+# If using KEDA:
+kubectl -n atharva-app get deploy/atharva-chat-api -w
+</code></pre>
+<p>Once the load test is complete you could delete HPA with </p>
+<pre><code>kubectl delete -f k8s/60-autoscale/hpa-chat-api.yaml
+</code></pre>
+<hr />
+<h3 id="c-keda-for-event-driven-scale-on-prometheus">C) KEDA (for event-driven scale on Prometheus)</h3>
+<p>Install KEDA as </p>
+<pre><code>helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+
+helm install keda kedacore/keda \
+  --namespace keda \
+  --create-namespace
+</code></pre>
+<p>validate </p>
+<pre><code>kubectl get all -n keda
+</code></pre>
+<hr />
+<h2 id="4-keda-scaledobject-prometheus-trigger">4) KEDA ScaledObject (Prometheus trigger)</h2>
+<p>Scale <strong>Chat API</strong> when <strong>RPS &gt; 1 per replica</strong> (same signal as HPA external metric).
+Point KEDA to Prometheus from kube-prometheus-stack.</p>
+<p><code>k8s/60-autoscale/keda-scaledobject-chat.yaml</code></p>
+<pre><code>apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: chat-api-qps
+  namespace: atharva-app
+spec:
+  scaleTargetRef:
+    name: atharva-chat-api
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  cooldownPeriod: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://kps-kube-prometheus-stack-prometheus.monitoring.svc:9090
+        metricName: vllm_queue_length
+        threshold: &quot;5&quot;
+        query: sum(vllm:num_requests_waiting)
+</code></pre>
+<p>Apply:</p>
+<pre><code>kubectl apply -f k8s/60-autoscale/keda-scaledobject-chat.yaml
+kubectl -n atharva-app get scaledobject
+</code></pre>
+<p>launch the load test and watch ScaledObject + HPA</p>
+<pre><code>kubectl create -f k8s/60-autoscale/loadgen-job.yaml
+watch kubectl -n atharva-app get scaledobject,hpa
+</code></pre>
+<blockquote>
+<p>You don’t need Prometheus Adapter for KEDA if you use the <code>prometheus</code> trigger (it queries Prom directly). We keep Adapter anyway for the HPA external-metric demo.</p>
+</blockquote>
+<hr />
+<h2 id="5-load-generator-to-trigger-scaling_1">5) Load generator (to trigger scaling)</h2>
+<p>A tiny <strong>Job</strong> that hammers the Chat API. Adjust <code>CONCURRENCY</code> &amp; <code>REQUESTS</code>.</p>
+<p><code>k8s/60-autoscale/loadgen-job.yaml</code></p>
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: loadgen-job-
+  namespace: atharva-app
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: hey
+        image: schoolofdevops/hey:latest
+        command: [&quot;hey&quot;]
+        args:
+          - &quot;-z&quot;
+          - &quot;3m&quot;                                 # duration
+          - &quot;-q&quot;
+          - &quot;5&quot;                                 # target QPS
+          - &quot;-c&quot;
+          - &quot;5&quot;                                # concurrency
+          - &quot;-m&quot;
+          - &quot;POST&quot;
+          - &quot;-H&quot;
+          - &quot;Content-Type: application/json&quot;
+          - &quot;-d&quot;
+          - '{&quot;question&quot;:&quot;Do you accept UPI Payments?&quot;,&quot;k&quot;:4,&quot;max_tokens&quot;:160}'
+          - &quot;http://atharva-chat-api.atharva-app.svc.cluster.local:8080/chat&quot;
+</code></pre>
+<p>Run it:</p>
+<pre><code>kubectl apply -f k8s/60-autoscale/loadgen-job.yaml
+kubectl -n atharva-app logs -f job/chat-loadgen
+</code></pre>
+<p>Watch scaling:</p>
+<pre><code># If using HPA CPU:
+kubectl -n atharva-app get hpa hpa-chat-api -w
+
+# If using KEDA:
+kubectl -n atharva-app get deploy/atharva-chat-api -w
+</code></pre>
+<hr />
+<h2 id="tips-gotchas">Tips / Gotchas</h2>
+<ul>
+<li>
+<p><strong>Pick one scaler</strong> per target at a time to avoid fights. For demos:</p>
+</li>
+<li>
+<p>Start with <strong>CPU HPA</strong>,</p>
+</li>
+<li>
+<p>Switch to <strong>RPS HPA</strong> (delete CPU HPA),</p>
+</li>
+<li>
+<p>Try <strong>KEDA</strong>.</p>
+</li>
+<li>
+<p>HPA external metrics require <strong>Prometheus Adapter</strong> (we installed &amp; mapped <code>chat_requests_per_second</code>).</p>
+</li>
+<li>
+<p>KEDA Prometheus trigger queries Prom directly; Adapter not required for that path.</p>
+</li>
+<li>
+<p><strong>VPA in “Off”</strong> mode shows recommendations under <code>describe vpa</code>. Flip to <code>"Auto"</code> if you want automatic updates (be mindful of restarts).</p>
+</li>
+</ul>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>
+<p>Horizontal scaling of <strong>Chat API</strong> on <strong>CPU</strong> or <strong>RPS</strong> (Prometheus-backed).</p>
+</li>
+<li>
+<p>Vertical <strong>recommendations</strong> for <strong>vLLM</strong> and <strong>Retriever</strong> to right-size resources.</p>
+</li>
+<li>
+<p>Event-driven scaling with <strong>KEDA</strong> using a Prometheus trigger.</p>
+</li>
+<li>
+<p>A simple <strong>load generator</strong> to visualize scaling behavior.</p>
+</li>
+</ul>
+<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab05/" class="btn btn-neutral float-left" title="Lab 05 - LLM Observability with Prometheus"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../lab07/" class="btn btn-neutral float-right" title="Lab 07 - GitOps for GenAI with ArgoCD">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab05/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../lab07/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
