@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Gourav Shah" /><link rel="canonical" href="http://llmops-tutorial.schoolofdevops.com/lab08/" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Lab 08 - Automating LLM pipelines with Argo Workflows - LLMOps with Kubernetes</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Lab 08 - Automating LLM pipelines with Argo Workflows";
+        var mkdocs_page_input_path = "lab08.md";
+        var mkdocs_page_url = "/lab08/";
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+        ga('create', "", "llmops-tutorial.schoolofdevops.com");
+        ga('send', 'pageview');
+      </script>
+    
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> LLMOps with Kubernetes
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Kubernetes for GenAI/LLMOps</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../lab00/">Lab 00 - Setting up Kubernetes Environment</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab02/">Lab 02 - Fine-tuning a Model with LoRA</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab03/">Lab 03 - Packaging Model as OCI Image</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab04/">Lab 04 - Serving with Kserve and vLLM</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab05/">Lab 05 - LLM Observability with Prometheus</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab06/">Lab 06 - Autoscaling vLLM + RAG + Chat API</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../lab07/">Lab 07 - GitOps for GenAI with ArgoCD</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 08 - Automating LLM pipelines with Argo Workflows</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#goals">Goals</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#what-youll-add">What you’ll add</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-install-argo-workflows-helm-minimal">1) Install Argo Workflows (helm, minimal)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#scriptsinstall_argo_workflowssh">scripts/install_argo_workflows.sh</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-allow-workflows-to-run-in-atharva-ml-with-access-to-podsworkflows">2) Allow workflows to run in atharva-ml with access to pods/workflows</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s80-workflowsrbac-argo-wfyaml">k8s/80-workflows/rbac-argo-wf.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-the-workflowtemplate-our-4-step-dag">3) The WorkflowTemplate (our 4-step DAG)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s80-workflowsworkflowtemplate-atharva-trainyaml">k8s/80-workflows/workflowtemplate-atharva-train.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-a-concrete-workflow-that-uses-the-template-optional">5) A concrete Workflow that uses the template (optional)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#k8s80-workflowsworkflow-atharva-runyaml">k8s/80-workflows/workflow-atharva-run.yaml</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-run-it">6) Run it</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#optional-gitops-this-with-argocd">Optional: GitOps this with ArgoCD</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#why-this-is-lightweight-in-comparison-to-kubeflow">Why this is lightweight (in comparison to kubeflow ? )</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#lab-summary">Lab Summary</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">LLMOps with Kubernetes</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Kubernetes for GenAI/LLMOps</li>
+      <li class="breadcrumb-item active">Lab 08 - Automating LLM pipelines with Argo Workflows</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/schoolofdevops/llmops-labuide/edit/master/docs/lab08.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="lab-8-lightweight-pipelines-with-argo-workflows">Lab 8 — Lightweight pipelines with Argo Workflows</h1>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Install <strong>Argo Workflows</strong> (minimal footprint) on KIND.</li>
+<li>Define a <strong>WorkflowTemplate</strong> that chains our steps in one DAG.</li>
+<li>Run it with one command (or wire it into ArgoCD later if you want GitOps for workflows too).</li>
+</ul>
+<blockquote>
+<p>Assumptions: You already have Labs 0–7 in place; your KIND nodes mount your repo at <code>/mnt/project</code>, and your repo path is <code>/mnt/project/atharva-dental-assistant</code>.</p>
+</blockquote>
+<hr />
+<h2 id="what-youll-add">What you’ll add</h2>
+<pre><code>atharva-dental-assistant/
+├─ k8s/
+│  └─ 80-workflows/
+│     ├─ rbac-argo-wf.yaml
+│     ├─ workflowtemplate-atharva-train.yaml
+│     └─ workflow-atharva-run.yaml          # (optional) direct Workflow using the template
+└─ scripts/
+   ├─ install_argo_workflows.sh
+   └─ run_workflow.sh
+</code></pre>
+<hr />
+<h2 id="1-install-argo-workflows-helm-minimal">1) Install Argo Workflows (helm, minimal)</h2>
+<h3 id="scriptsinstall_argo_workflowssh"><code>scripts/install_argo_workflows.sh</code></h3>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+# Create Argo Workflows namespace
+kubectl create namespace argo-workflows
+
+# Install via Helm (lightweight defaults)
+helm repo add argo https://argoproj.github.io/argo-helm &gt;/dev/null
+helm repo update &gt;/dev/null
+helm upgrade --install argo-workflows argo/argo-workflows \
+  --namespace argo-workflows \
+  --set server.enabled=true \
+  --set server.authModes\[0\]=server \
+  --set workflow.rbac.create=true \
+  --set server.serviceType=NodePort \
+  --set server.serviceNodePort=30600 
+
+# Validate 
+kubectl get all -n argo-workflows
+
+# Print the NodePort for the UI
+echo &quot;Argo Workflows UI : http://127.0.0.1:30600&quot;
+
+</code></pre>
+<blockquote>
+<p>You can also expose the UI via Ingress later; NodePort is perfect for lab.</p>
+</blockquote>
+<hr />
+<h2 id="2-allow-workflows-to-run-in-atharva-ml-with-access-to-podsworkflows">2) Allow workflows to run in <code>atharva-ml</code> with access to pods/workflows</h2>
+<pre><code># Run this from project/atharva-dental-assistant
+mkdir k8s/80-workflows
+</code></pre>
+<h3 id="k8s80-workflowsrbac-argo-wfyaml"><code>k8s/80-workflows/rbac-argo-wf.yaml</code></h3>
+<pre><code>apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wf-runner
+  namespace: atharva-ml
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wf-runner-role
+  namespace: atharva-ml
+rules:
+- apiGroups: [&quot;&quot;]
+  resources: [&quot;pods&quot;,&quot;pods/log&quot;,&quot;pods/exec&quot;,&quot;secrets&quot;,&quot;configmaps&quot;,&quot;persistentvolumeclaims&quot;,&quot;events&quot;]
+  verbs: [&quot;create&quot;,&quot;get&quot;,&quot;list&quot;,&quot;watch&quot;,&quot;update&quot;,&quot;patch&quot;,&quot;delete&quot;]
+- apiGroups: [&quot;batch&quot;]
+  resources: [&quot;jobs&quot;]
+  verbs: [&quot;create&quot;,&quot;get&quot;,&quot;list&quot;,&quot;watch&quot;,&quot;delete&quot;]
+- apiGroups: [&quot;argoproj.io&quot;]
+  resources: [&quot;workflowtaskresults&quot;,&quot;workflowtasksets&quot;]
+  verbs: [&quot;create&quot;,&quot;get&quot;,&quot;list&quot;,&quot;watch&quot;,&quot;update&quot;,&quot;patch&quot;,&quot;delete&quot;]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wf-runner-rb
+  namespace: atharva-ml
+subjects:
+- kind: ServiceAccount
+  name: wf-runner
+  namespace: atharva-ml
+roleRef:
+  kind: Role
+  name: wf-runner-role
+  apiGroup: rbac.authorization.k8s.io
+</code></pre>
+<p>Apply it:</p>
+<pre><code>kubectl apply -f k8s/80-workflows/rbac-argo-wf.yaml
+</code></pre>
+<hr />
+<h2 id="3-the-workflowtemplate-our-4-step-dag">3) The WorkflowTemplate (our 4-step DAG)</h2>
+<h3 id="k8s80-workflowsworkflowtemplate-atharva-trainyaml"><code>k8s/80-workflows/workflowtemplate-atharva-train.yaml</code></h3>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: atharva-train-merge
+  namespace: atharva-ml
+spec:
+  entrypoint: dag
+  serviceAccountName: wf-runner
+  podGC:
+    strategy: OnWorkflowSuccess
+
+  templates:
+  - name: dag
+    dag:
+      tasks:
+      - name: generate-data
+        template: generate-data
+      - name: build-index
+        dependencies: [generate-data]
+        template: build-index
+      - name: train-lora
+        dependencies: [build-index]
+        template: train-lora
+        arguments:
+          parameters:
+          - name: max-steps
+            value: &quot;{{workflow.parameters.max-steps}}&quot;
+      - name: merge-model
+        dependencies: [train-lora]
+        template: merge-model
+
+  # --- Step 1: Generate synthetic training data (no heavy deps) ---
+  - name: generate-data
+    nodeSelector:
+      kubernetes.io/hostname: llmops-kind-worker
+    container:
+      image: python:3.11-slim
+      imagePullPolicy: IfNotPresent
+      command: [&quot;bash&quot;,&quot;-lc&quot;]
+      args:
+        - |
+          set -euo pipefail
+          python /mnt/project/atharva-dental-assistant/tools/synth_data.py \
+            --clinic Pune --currency INR \
+            --treatments /mnt/project/atharva-dental-assistant/datasets/clinic/treatments.json \
+            --policies /mnt/project/atharva-dental-assistant/datasets/clinic/policies/*.md \
+            --faq /mnt/project/atharva-dental-assistant/datasets/clinic/faq.md \
+            --recent /mnt/project/atharva-dental-assistant/datasets/clinic/recent_queries.jsonl \
+            --out /mnt/project/atharva-dental-assistant/datasets/training
+      volumeMounts:
+      - name: host
+        mountPath: /mnt/project
+      resources:
+        requests:
+          cpu: &quot;250m&quot;
+          memory: &quot;512Mi&quot;
+    volumes:
+    - name: host
+      hostPath:
+        path: /mnt/project
+        type: Directory
+
+  # --- Step 2: Build sparse TF-IDF index (lightweight, wheels-only) ---
+  - name: build-index
+    nodeSelector:
+      kubernetes.io/hostname: llmops-kind-worker
+    container:
+      image: python:3.11-slim
+      imagePullPolicy: IfNotPresent
+      command: [&quot;bash&quot;,&quot;-lc&quot;]
+      args:
+        - |
+          set -euo pipefail
+          export HOME=/mnt/project
+          VENV=&quot;$HOME/.venv-build&quot;
+          ROOT=&quot;$HOME/atharva-dental-assistant/datasets/clinic&quot;
+          OUT=&quot;$HOME/atharva-dental-assistant/artifacts/rag&quot;
+
+          python -m venv &quot;$VENV&quot;
+          . &quot;$VENV/bin/activate&quot;
+          python -m pip install --upgrade pip
+          pip install --only-binary=:all: \
+            numpy==1.26.4 scipy==1.10.1 scikit-learn==1.3.2 joblib==1.3.2
+
+          mkdir -p &quot;$OUT&quot;
+          python /mnt/project/atharva-dental-assistant/rag/build_index.py \
+            --root &quot;$ROOT&quot; \
+            --outdir &quot;$OUT&quot; \
+            --backend sparse
+
+          ls -lah &quot;$OUT&quot; &amp;&amp; (wc -c &quot;$OUT&quot;/meta.json || true)
+      volumeMounts:
+      - name: host
+        mountPath: /mnt/project
+      resources:
+        requests:
+          cpu: &quot;500m&quot;
+          memory: &quot;1Gi&quot;
+    volumes:
+    - name: host
+      hostPath:
+        path: /mnt/project
+        type: Directory
+
+  # --- Step 3: LoRA training (matches job-train-lora.yaml) ---
+  - name: train-lora
+    inputs:
+      parameters:
+      - name: max-steps
+        value: &quot;400&quot;
+    nodeSelector:
+      kubernetes.io/hostname: llmops-kind-worker
+    container:
+      image: schoolofdevops/lora-build-python:3.11-slim
+      imagePullPolicy: IfNotPresent
+      command: [&quot;bash&quot;,&quot;-lc&quot;]
+      args:
+        - |
+          set -euo pipefail
+          # MAX_STEPS is read by your training script from env
+          export MAX_STEPS={{inputs.parameters.max-steps}}
+          python /mnt/project/atharva-dental-assistant/training/train_lora.py
+          # record last run id for the next step
+          RUN_DIR=&quot;$(ls -1dt /mnt/project/atharva-dental-assistant/artifacts/train/*/ | head -n 1)&quot;
+          RUN_ID=&quot;$(basename &quot;$RUN_DIR&quot;)&quot;
+          echo &quot;$RUN_ID&quot; &gt; /mnt/project/atharva-dental-assistant/artifacts/train/LAST_RUN_ID.txt
+      env:
+      - name: BASE_MODEL
+        value: &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;
+      - name: MAX_SEQ_LEN
+        value: &quot;256&quot;
+      - name: LORA_R
+        value: &quot;4&quot;
+      - name: LORA_ALPHA
+        value: &quot;8&quot;
+      - name: LORA_DROPOUT
+        value: &quot;0.05&quot;
+      - name: LR
+        value: &quot;2e-4&quot;
+      - name: WARMUP_RATIO
+        value: &quot;0.02&quot;
+      - name: BATCH_SIZE
+        value: &quot;1&quot;
+      - name: GRAD_ACCUM
+        value: &quot;1&quot;
+      - name: MAX_STEPS
+        value: &quot;80&quot;                 # default; overridden by parameter above
+      - name: DEMO_MAX_TRAIN_SAMPLES
+        value: &quot;0&quot;
+      - name: DEMO_MAX_VAL_SAMPLES
+        value: &quot;0&quot;
+      - name: HF_HOME
+        value: &quot;/cache/hf&quot;
+      - name: HF_HUB_DISABLE_TELEMETRY
+        value: &quot;1&quot;
+      - name: TOKENIZERS_PARALLELISM
+        value: &quot;true&quot;
+      - name: OMP_NUM_THREADS
+        value: &quot;4&quot;
+      - name: MKL_NUM_THREADS
+        value: &quot;4&quot;
+      - name: NUMEXPR_MAX_THREADS
+        value: &quot;4&quot;
+      resources:
+        requests:
+          cpu: &quot;2&quot;
+          memory: &quot;4Gi&quot;
+          ephemeral-storage: &quot;5Gi&quot;
+        limits:
+          cpu: &quot;4&quot;
+          memory: &quot;6Gi&quot;
+          ephemeral-storage: &quot;20Gi&quot;
+      volumeMounts:
+      - name: host
+        mountPath: /mnt/project
+      - name: hf-cache
+        mountPath: /cache/hf
+    volumes:
+    - name: host
+      hostPath:
+        path: /mnt/project
+        type: Directory
+    - name: hf-cache
+      hostPath:
+        path: /mnt/hf-cache
+        type: DirectoryOrCreate
+
+  # --- Step 4: Merge LoRA into base model (matches job-merge-model.yaml) ---
+  - name: merge-model
+    nodeSelector:
+      kubernetes.io/hostname: llmops-kind-worker
+    container:
+      image: schoolofdevops/lora-build-python:3.11-slim
+      imagePullPolicy: IfNotPresent
+      command: [&quot;bash&quot;,&quot;-lc&quot;]
+      args:
+        - |
+          set -euo pipefail
+          # If RUN_ID not provided, read the last run id produced by previous step
+          export RUN_ID=&quot;${RUN_ID:-$(tr -d ' \n' &lt;/mnt/project/atharva-dental-assistant/artifacts/train/LAST_RUN_ID.txt)}&quot;
+          echo &quot;Merging RUN_ID=$RUN_ID&quot;
+          python /mnt/project/atharva-dental-assistant/training/merge_lora.py
+      env:
+      - name: BASE_MODEL
+        value: &quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;
+      # Optional: allow overriding RUN_ID from workflow params if ever needed
+      # - name: RUN_ID
+      #   value: &quot;REPLACE_WITH_RUN_ID&quot;
+      volumeMounts:
+      - name: host
+        mountPath: /mnt/project
+      resources:
+        requests:
+          cpu: &quot;500m&quot;
+          memory: &quot;2Gi&quot;
+    volumes:
+    - name: host
+      hostPath:
+        path: /mnt/project
+        type: Directory
+
+  arguments:
+    parameters:
+    - name: max-steps
+      value: &quot;100&quot;
+</code></pre>
+<hr />
+<h2 id="5-a-concrete-workflow-that-uses-the-template-optional">5) A concrete Workflow that uses the template (optional)</h2>
+<h3 id="k8s80-workflowsworkflow-atharva-runyaml"><code>k8s/80-workflows/workflow-atharva-run.yaml</code></h3>
+<pre><code>apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: atharva-run-
+  namespace: atharva-ml
+spec:
+  serviceAccountName: wf-runner
+  workflowTemplateRef:
+    name: atharva-train-merge
+  arguments:
+    parameters:
+    - name: max-steps
+      value: &quot;100&quot;
+</code></pre>
+<hr />
+<h2 id="6-run-it">6) Run it</h2>
+<pre><code># Install Argo Workflows (UI will be port-forwarded on 2746)
+bash scripts/install_argo_workflows.sh
+# (Use a new terminal if you want to keep the UI running)
+
+# Create RBAC + PV/PVC + Template
+kubectl apply -f k8s/80-workflows/rbac-argo-wf.yaml
+kubectl apply -f k8s/80-workflows/pv-pvc-project.yaml
+kubectl apply -f k8s/80-workflows/workflowtemplate-atharva-train.yaml
+
+# Start a run
+kubectl create -f k8s/80-workflows/workflow-atharva-run.yaml
+
+# Watch progress
+kubectl -n atharva-ml get wf
+kubectl -n atharva-ml get pods -w
+</code></pre>
+<p>Or trigger from the <strong>Argo Workflows UI</strong> at <a href="http://127.0.0.1:30600/">http://127.0.0.1:30600/</a> (submit from template, optionally set <code>max-steps</code> param).</p>
+<p>When the workflow finishes, you’ll have:</p>
+<pre><code>artifacts/
+  rag/...
+  train/&lt;RUN_ID&gt;/
+    lora_adapter/
+    tokenizer/
+    merged-model/
+    model.tgz
+    run.json
+</code></pre>
+<p>…ready for <strong>Lab 3</strong> (build OCI model image) and <strong>Lab 4</strong> (serve via vLLM) if you want to automate promotion later.</p>
+<hr />
+<h2 id="optional-gitops-this-with-argocd">Optional: GitOps this with ArgoCD</h2>
+<p>Since you already have ArgoCD managing serving/obs/scale, you can also let ArgoCD manage:</p>
+<ul>
+<li>the <strong>WorkflowTemplate</strong> YAML (declarative), and</li>
+<li>a <strong>CronWorkflow</strong> (if you want scheduled retraining; not included above to keep it minimal).</li>
+</ul>
+<p>Example ArgoCD child app path: <code>k8s/80-workflows/</code> with sync-wave <strong>1</strong> (before serving) if you prefer.</p>
+<hr />
+<h2 id="why-this-is-lightweight-in-comparison-to-kubeflow">Why this is lightweight (in comparison to kubeflow ? )</h2>
+<ul>
+<li>Argo Workflows adds a small controller + optional UI service (we enabled the server).</li>
+<li>No MinIO/MySQL pair like full Kubeflow Pipelines; all artifacts are simply <strong>hostPath</strong> on disk.</li>
+<li>Each step is a tiny <strong>python:3.11-slim</strong> container running the same scripts from your repo—no code duplication, no special SDK.</li>
+<li>You can swap images or add Kaniko/BuildKit step later if you want to bake the <strong>model image</strong> inside the workflow.</li>
+</ul>
+<hr />
+<h2 id="lab-summary">Lab Summary</h2>
+<p>This is what we accomplished in this lab</p>
+<ul>
+<li>Installed <strong>Argo Workflows</strong> and created a <strong>WorkflowTemplate</strong> to orchestrate data → index → train → merge.</li>
+<li>Reused <code>/mnt/project</code> via a PVC so steps share files seamlessly.</li>
+<li>Triggered a full run either via <strong>kubectl</strong> or the <strong>Argo UI</strong>.</li>
+<li>Kept the lab footprint <strong>light</strong> and aligned with your <strong>ArgoCD</strong> stack.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../lab07/" class="btn btn-neutral float-left" title="Lab 07 - GitOps for GenAI with ArgoCD"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright @ 2025 Gourav Shah, School of Devops. Some rights reserved. License CC BY-NC-SA</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/schoolofdevops/llmops-labuide" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../lab07/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
