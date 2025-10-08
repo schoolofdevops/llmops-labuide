@@ -57,6 +57,10 @@
               <ul class="current">
                   <li class="toctree-l1 current"><a class="reference internal current" href="#">Lab 00 - Setting up Kubernetes Environment</a>
     <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#install-kind-and-kubectl">Install kind and Kubectl</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#setupkind-configyaml">setup/kind-config.yaml</a>
+    </li>
     </ul>
                   </li>
                   <li class="toctree-l1"><a class="reference internal" href="../lab01/">Lab 01 - Building RAG system</a>
@@ -116,7 +120,12 @@ mkdir atharva-dental-assistant
 cd atharva-dental-assistant
 mkdir scripts setup 
 </code></pre>
-<h1 id="setupkind-configyaml">setup/kind-config.yaml</h1>
+<h2 id="install-kind-and-kubectl">Install kind and Kubectl</h2>
+<ul>
+<li>Install kind : <a href="https://kubernetes.io/docs/tasks/tools/">https://kind.sigs.k8s.io/docs/user/quick-start/#installation</a>. </li>
+<li>Install kubectl: <a href="https://kubernetes.io/docs/tasks/tools/">https://kubernetes.io/docs/tasks/tools/</a>. </li>
+</ul>
+<h2 id="setupkind-configyaml">setup/kind-config.yaml</h2>
 <p>Create this file to: (1) pin a recent node image, (2) enable the <strong>ImageVolume</strong> feature gate across control-plane components <strong>and</strong> kubelet, and (3) mount your local <code>./project</code> directory into each node.</p>
 <pre><code># Enable ImageVolume feature gate (beta, disabled-by-default as of v1.33+)
 # Ref: &quot;Use an Image Volume With a Pod&quot; + Feature Gates docs.
