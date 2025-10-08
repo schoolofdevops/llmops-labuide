@@ -124,7 +124,7 @@ mkdir scripts setup
 <ul>
 <li>Install kind : <a href="https://kubernetes.io/docs/tasks/tools/">https://kind.sigs.k8s.io/docs/user/quick-start/#installation</a>. </li>
 <li>Install kubectl: <a href="https://kubernetes.io/docs/tasks/tools/">https://kubernetes.io/docs/tasks/tools/</a>. </li>
-<li>Install HELM: <a href="https://helm.sh/docs/intro/install/">https://helm.sh/docs/intro/install/</a></li>
+<li>Install HELM: <a href="https://helm.sh/docs/intro/install/">https://helm.sh/docs/intro/install/</a>. </li>
 </ul>
 <h2 id="setupkind-configyaml">setup/kind-config.yaml</h2>
 <p>Create this file to: (1) pin a recent node image, (2) enable the <strong>ImageVolume</strong> feature gate across control-plane components <strong>and</strong> kubelet, and (3) mount your local <code>./project</code> directory into each node.</p>
@@ -304,8 +304,14 @@ Next:
 &quot;
 </code></pre>
 <p>validate the cluster using </p>
-<pre><code>kubectl get nodes 
+<pre><code># Validate the nodes are listed Ready
+kubectl get nodes 
+
+# Validate the pods are running 
 kubectl get pods -A 
+
+# Validate namespaces atharva-ml, atharva-app and monitoring are created
+kubectl get ns
 </code></pre>
 <hr />
 <h2 id="lab-summary">Lab Summary</h2>
