@@ -222,6 +222,12 @@
 <hr />
 <pre><code>cd project/atharva-dental-assistant
 
+# Pull a vLLM image for CPU Inference
+docker image pull schoolofdevops/vllm-cpu-nonuma:0.9.1
+
+# Load it onto KinD cluster
+kind load docker-image --name llmops-kind schoolofdevops/vllm-cpu-nonuma:0.9.1 --nodes llmops-kind-worker
+
 </code></pre>
 <h2 id="1-vllm-with-imagevolume-kserve-rawdeployment">1) vLLM with ImageVolume (KServe RawDeployment)</h2>
 <h3 id="k8s40-serverawdeployment-vllmyaml"><code>k8s/40-serve/rawdeployment-vllm.yaml</code></h3>
