@@ -1,22 +1,22 @@
 # LLMOps with Kubernetes
 
-**Hands-on labs to fine-tune, deploy, observe, and scale GenAI workloads on Kubernetes — from zero to production.**
+Hands-on labs to fine-tune, deploy, observe, and scale GenAI workloads on Kubernetes — from zero to production.
 
-This course walks you through building a complete **LLMOps workflow** for the *Atharva Dental Clinic Assistant* — a domain-adapted chatbot powered by **Retrieval-Augmented Generation (RAG)** and a **LoRA-fine-tuned LLM**.  
-You’ll start from a blank KIND cluster and progress all the way to a fully automated, observable, and scalable GenAI system powered by **KServe**, **vLLM**, **Prometheus**, and **ArgoCD**.
+This course walks you through building a complete LLMOps workflow for the Atharva Dental Clinic Assistant — a domain-adapted chatbot powered by Retrieval-Augmented Generation (RAG) and a LoRA-fine-tuned LLM.  
+You’ll start from a blank KIND cluster and progress all the way to a fully automated, observable, and scalable GenAI system powered by KServe, vLLM, Prometheus, and ArgoCD.
 
 ---
 
 ## What You’ll Learn
 
-- Deploy and operate **LLM-based applications** on Kubernetes  
-- Generate **synthetic domain data** and build a **FAISS retriever**
-- **Fine-tune** open LLMs with **LoRA** on CPU-only environments  
-- Package models as **OCI artifacts** and mount them via **ImageVolumes**
-- Serve models using **KServe (RawDeployment)** + **vLLM**
-- Instrument and visualize **LLM observability metrics** in Prometheus & Grafana  
-- Implement **autoscaling (HPA, VPA, KEDA)** for GenAI services  
-- Automate continuous delivery using **ArgoCD GitOps**
+- Deploy and operate LLM-based applications on Kubernetes  
+- Generate synthetic domain data and build a FAISS retriever
+- Fine-tune open LLMs with LoRA on CPU-only environments  
+- Package models as OCI artifacts and mount them via ImageVolumes
+- Serve models using KServe (RawDeployment) + vLLM
+- Instrument and visualize LLM observability metrics in Prometheus & Grafana  
+- Implement autoscaling (HPA, VPA, KEDA) for GenAI services  
+- Automate continuous delivery using ArgoCD GitOps
 
 ---
 

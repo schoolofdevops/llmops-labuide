@@ -1,4 +1,4 @@
-# Lab 0 - Setup 
+# Lab 0 - Setup a 3 Node Kubernetes Cluster
 
 This lab gets you a KIND cluster that’s ready for **ImageVolumes** and **KServe (RawDeployment)** that you would setup and use later, plus namespaces and monitoring.
 
@@ -17,7 +17,14 @@ cd atharva-dental-assistant
 mkdir scripts setup 
 ```
 
-# setup/kind-config.yaml
+
+### Install Supporting Tools 
+
+  * Install kind : [https://kind.sigs.k8s.io/docs/user/quick-start/#installation](https://kubernetes.io/docs/tasks/tools/). 
+  * Install kubectl: [https://kubernetes.io/docs/tasks/tools/](https://kubernetes.io/docs/tasks/tools/). 
+  * Install HELM: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intro/install/). 
+
+## setup/kind-config.yaml
 
 Create this file to: (1) pin a recent node image, (2) enable the **ImageVolume** feature gate across control-plane components **and** kubelet, and (3) mount your local `./project` directory into each node.
 
@@ -203,6 +210,26 @@ Next:
 "
 ```
 
+Execute the script with 
+
+```
+bash scripts/bootstrap_kind.sh
+```
+
+
+validate the cluster using 
+
+```
+# Validate the nodes are listed Ready
+kubectl get nodes 
+
+# Validate the pods are running 
+kubectl get pods -A 
+
+# Validate namespaces atharva-ml, atharva-app and monitoring are created
+kubectl get ns
+```
+
 ---
 
 ## Lab Summary 
@@ -213,5 +240,4 @@ This is what we accomplished in this lab
 
 * **ImageVolume** feature gate enabled at control-plane and **kubelet** level. Docs note it’s **beta** and **off by default**; we turned it on. ([Kubernetes](https://kubernetes.io/docs/tasks/configure-pod-container/image-volumes/))
 
-#courses/llmops/labs/v1
 

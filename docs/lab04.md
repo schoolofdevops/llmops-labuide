@@ -52,6 +52,12 @@ atharva-dental-assistant/
 ```
 cd project/atharva-dental-assistant
 
+# Pull a vLLM image for CPU Inference
+docker image pull schoolofdevops/vllm-cpu-nonuma:0.9.1
+
+# Load it onto KinD cluster
+kind load docker-image --name llmops-kind schoolofdevops/vllm-cpu-nonuma:0.9.1 --nodes llmops-kind-worker
+
 ```
 
 ## 1) vLLM with ImageVolume (KServe RawDeployment)
