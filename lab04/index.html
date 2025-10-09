@@ -113,13 +113,9 @@
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#1-model-list">1) Model list</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#2-simple-chat-completion">2) Simple chat completion</a>
+    <li class="toctree-l3"><a class="reference internal" href="#2-chat-api-test">2) chat API Test</a>
     </li>
-    <li class="toctree-l3"><a class="reference internal" href="#3-legacy-completions-optional">3) Legacy completions (optional)</a>
-    </li>
-    <li class="toctree-l3"><a class="reference internal" href="#4-chat-api">4) chat API</a>
-    </li>
-    <li class="toctree-l3"><a class="reference internal" href="#5-to-see-whats-being-sent-to-the-llm">5) To see whats being sent to the LLM</a>
+    <li class="toctree-l3"><a class="reference internal" href="#3-to-see-whats-being-sent-to-the-llm">3) To see whats being sent to the LLM</a>
     </li>
         </ul>
     </li>
@@ -752,35 +748,7 @@ bash scripts/smoke_e2e.sh
 <h3 id="1-model-list">1) Model list</h3>
 <pre><code>curl -s http://127.0.0.1:30200/v1/models | jq .
 </code></pre>
-<h3 id="2-simple-chat-completion">2) Simple chat completion</h3>
-<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
-        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
-        &quot;max_tokens&quot;: 32,
-        &quot;temperature&quot;: 0.2
-      }' | jq .
-</code></pre>
-<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
-        &quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in 5 words.&quot;}],
-        &quot;max_tokens&quot;: 32,
-        &quot;temperature&quot;: 0.2
-      }' | jq .
-</code></pre>
-<h3 id="3-legacy-completions-optional">3) Legacy completions (optional)</h3>
-<pre><code>curl -s -X POST http://127.0.0.1:30300/v1/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        &quot;model&quot;:&quot;smollm2-135m-atharva&quot;,
-        &quot;prompt&quot;:&quot;Write a haiku about dentists:&quot;,
-        &quot;max_tokens&quot;: 40
-      }' | jq .
-</code></pre>
-<h3 id="4-chat-api">4) chat API</h3>
+<h3 id="2-chat-api-test">2) chat API Test</h3>
 <pre><code>curl -s -X POST http://127.0.0.1:30300/chat -H &quot;content-type: application/json&quot; \
   -d '{&quot;question&quot;:&quot;Are you open on Sundays?&quot;,&quot;k&quot;:4}' | jq .
 
@@ -788,7 +756,7 @@ curl -s -X POST http://127.0.0.1:30300/chat -H &quot;content-type: application/j
   -d '{&quot;question&quot;:&quot;Whats the price range for Root Canal Therapy?&quot;,&quot;k&quot;:4}' | jq .
 
 </code></pre>
-<h3 id="5-to-see-whats-being-sent-to-the-llm">5) To see whats being sent to the LLM</h3>
+<h3 id="3-to-see-whats-being-sent-to-the-llm">3) To see whats being sent to the LLM</h3>
 <pre><code>curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/json' \\n  -d '{&quot;question&quot;:&quot;How long does scaling take and what aftercare is needed?&quot;,&quot;k&quot;:4,&quot;debug&quot;:true}' \\n  | jq -r '.debug.messages[0].content'
 
 curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/json' \\n  -d '{&quot;question&quot;:&quot;Whats the price range for Root Canal Therapy?&quot;,&quot;k&quot;:4,&quot;debug&quot;:true}' \\n  | jq -r '.debug.messages[0].content'
@@ -811,7 +779,6 @@ curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/j
 <p>Verified end-to-end responses and citations.</p>
 </li>
 </ul>
-<h1 id="coursesllmopslabsv1">courses/llmops/labs/v1</h1>
               
             </div>
           </div><footer>
