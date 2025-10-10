@@ -97,11 +97,7 @@
     </li>
         </ul>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#4-grafana-dashboard-configmap">4) Grafana dashboard (ConfigMap)</a>
-        <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#k8s50-observabilitycm-grafana-dashboardyaml">k8s/50-observability/cm-grafana-dashboard.yaml</a>
-    </li>
-        </ul>
+    <li class="toctree-l2"><a class="reference internal" href="#5-add-labels-to-the-service-spec">5) Add Labels to the Service Spec</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#5-deploy-all-observability-bits">5) Deploy all observability bits</a>
         <ul>
@@ -193,6 +189,11 @@
 </code></pre>
 <hr />
 <h2 id="0-setup-prometheus">0) Setup Prometheus</h2>
+<p>Add prometheus repo for helm </p>
+<pre><code>helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+</code></pre>
 <p>Setup prometheus stack along with grafana with </p>
 <pre><code>helm upgrade --install kps -n monitoring \
   prometheus-community/kube-prometheus-stack \
@@ -490,8 +491,9 @@ def chat(req: ChatRequest):
             uvicorn chat_api:app --host 0.0.0.0 --port 8080 --proxy-headers
 </code></pre>
 <p>Redeploy chat api as </p>
-<pre><code>kubectl delete -f k8s/40-serve/deploy-retriever.yaml
-kubectl apply -f k8s/40-serve/deploy-retriever.yaml
+<pre><code>kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
+kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+
 </code></pre>
 <hr />
 <h3 id="b-retriever-add-prometheus-metrics-ragretrieverpy">B) Retriever — add Prometheus metrics (<code>rag/retriever.py</code>)</h3>
@@ -805,8 +807,8 @@ def search(req: SearchRequest):
                 fastapi==0.112.2 uvicorn==0.30.6 prometheus-client&gt;=0.20.0
 </code></pre>
 <p>Redeploy chat api as </p>
-<pre><code>kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
-kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+<pre><code>kubectl delete -f k8s/40-serve/deploy-retriever.yaml
+kubectl apply -f k8s/40-serve/deploy-retriever.yaml
 </code></pre>
 <blockquote>
 <p>No rebuild needed—these run from the mounted repo (<code>/mnt/project</code>).</p>
@@ -922,143 +924,7 @@ spec:
       annotations:
         summary: &quot;Chat API p95 latency &gt; 3s&quot;
 </code></pre>
-<hr />
-<h2 id="4-grafana-dashboard-configmap">4) Grafana dashboard (ConfigMap)</h2>
-<p>A concise starter dashboard with:</p>
-<ul>
-<li>
-<p>E2E latency p50/p95</p>
-</li>
-<li>
-<p>Requests &amp; errors</p>
-</li>
-<li>
-<p>Tokens (prompt/comp/total)</p>
-</li>
-<li>
-<p>Retriever latency p95</p>
-</li>
-<li>
-<p>vLLM tokens/sec (if exported by your vLLM build)</p>
-</li>
-</ul>
-<h3 id="k8s50-observabilitycm-grafana-dashboardyaml"><code>k8s/50-observability/cm-grafana-dashboard.yaml</code></h3>
-<pre><code>apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: atharva-llmops-dashboard2
-  namespace: monitoring
-  labels:
-    grafana_dashboard: &quot;1&quot;
-data:
-  atharva-llmops.json: |
-    {
-      &quot;title&quot;: &quot;Atharva LLMOps - Overview&quot;,
-      &quot;timezone&quot;: &quot;browser&quot;,
-      &quot;schemaVersion&quot;: 39,
-      &quot;version&quot;: 2,
-      &quot;panels&quot;: [
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Chat RPS&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum(rate(chat_requests_total[1m]))&quot; } ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 0, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat Errors by Stage (/s)&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum by (stage) (rate(chat_errors_total[1m]))&quot; } ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 0, &quot;w&quot;: 18, &quot;h&quot;: 6 }
-        },
-
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat E2E Latency (p50/p95)&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;histogram_quantile(0.50, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p50&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p95&quot; }
-          ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 4, &quot;w&quot;: 12, &quot;h&quot;: 7 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Chat Sub-steps p95 (Retriever &amp; vLLM)&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(rag_retrieval_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;retriever (inside chat)&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm_request_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;vLLM (inside chat)&quot; }
-          ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 4, &quot;w&quot;: 12, &quot;h&quot;: 7 }
-        },
-
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Retriever RPS&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum(rate(retriever_requests_total[1m]))&quot; } ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 11, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Errors by Stage (/s)&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;sum by (stage) (rate(retriever_errors_total[1m]))&quot; } ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 11, &quot;w&quot;: 18, &quot;h&quot;: 6 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Search Latency (p50/p95)&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;histogram_quantile(0.50, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p50&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;p95&quot; }
-          ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 17, &quot;w&quot;: 12, &quot;h&quot;: 7 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;Retriever Sub-steps p95 (Dense/Sparse)&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_dense_encode_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;dense encode&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_dense_faiss_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;dense faiss&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_vectorize_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;sparse vectorize&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_dot_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;sparse dot&quot; }
-          ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 17, &quot;w&quot;: 12, &quot;h&quot;: 7 }
-        },
-
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Prompt Tokens (last)&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_prompt_tokens&quot; } ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Completion Tokens (last)&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_completion_tokens&quot; } ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 6, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;Total Tokens (last)&quot;,
-          &quot;targets&quot;: [ { &quot;expr&quot;: &quot;chat_total_tokens&quot; } ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;vLLM Tokens/sec&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;sum(rate(vllm:prompt_tokens_total[5m]))&quot;, &quot;legendFormat&quot;: &quot;prompt t/s&quot; },
-            { &quot;expr&quot;: &quot;sum(rate(vllm:generation_tokens_total[5m]))&quot;, &quot;legendFormat&quot;: &quot;generation t/s&quot; }
-          ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 18, &quot;y&quot;: 24, &quot;w&quot;: 6, &quot;h&quot;: 6 }
-        },
-        { &quot;type&quot;: &quot;graph&quot;, &quot;title&quot;: &quot;vLLM Latencies (p95)&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;TTFT p95&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;E2E p95&quot; },
-            { &quot;expr&quot;: &quot;histogram_quantile(0.95, sum by (le) (rate(vllm:request_inference_time_seconds_bucket[5m])))&quot;, &quot;legendFormat&quot;: &quot;inference p95&quot; }
-          ],
-          &quot;legend&quot;: { &quot;show&quot;: true },
-          &quot;gridPos&quot;: { &quot;x&quot;: 0, &quot;y&quot;: 28, &quot;w&quot;: 12, &quot;h&quot;: 7 }
-        },
-        { &quot;type&quot;: &quot;stat&quot;, &quot;title&quot;: &quot;vLLM Queue / Running&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;sum(vllm:num_requests_waiting)&quot;, &quot;legendFormat&quot;: &quot;waiting&quot; },
-            { &quot;expr&quot;: &quot;sum(vllm:num_requests_running)&quot;, &quot;legendFormat&quot;: &quot;running&quot; }
-          ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 12, &quot;y&quot;: 28, &quot;w&quot;: 6, &quot;h&quot;: 4 }
-        },
-
-        { &quot;type&quot;: &quot;table&quot;, &quot;title&quot;: &quot;Retriever Index &amp; Meta Sizes&quot;,
-          &quot;targets&quot;: [
-            { &quot;expr&quot;: &quot;retriever_index_items&quot;, &quot;legendFormat&quot;: &quot;index_items&quot; },
-            { &quot;expr&quot;: &quot;retriever_meta_items&quot;, &quot;legendFormat&quot;: &quot;meta_items&quot; }
-          ],
-          &quot;gridPos&quot;: { &quot;x&quot;: 18, &quot;y&quot;: 30, &quot;w&quot;: 6, &quot;h&quot;: 5 }
-        }
-      ]
-    }
-</code></pre>
+<h2 id="5-add-labels-to-the-service-spec">5) Add Labels to the Service Spec</h2>
 <p>Also update the existing service spec to add relevant labels which are then used by prometheus service monitor to scrape the metrics from </p>
 <p>File : <code>k8s/40-serve/svc-retriever.yaml</code></p>
 <pre><code>apiVersion: v1
@@ -1108,7 +974,6 @@ set -euo pipefail
 kubectl apply -f k8s/50-observability/sm-vllm.yaml
 kubectl apply -f k8s/50-observability/sm-chat-api.yaml
 kubectl apply -f k8s/50-observability/sm-retriever.yaml
-kubectl apply -f k8s/50-observability/cm-grafana-dashboard.yaml
 kubectl apply -f k8s/50-observability/pr-alerts.yaml || true
 
 echo &quot;Waiting a bit for Prometheus to pick up targets...&quot;
@@ -1136,6 +1001,8 @@ bash scripts/deploy_observability.sh
 </code></pre>
 <p>Open Grafana at <a href="http://127.0.0.1:3000/">http://127.0.0.1:3000</a>
 (Default admin/admin unless you changed it via Helm values.)</p>
+<p>From Dashboards -&gt; New -&gt; Import </p>
+<p>Paste the Json Dashboard <a href="https://gist.github.com/initcron/02f3842ce6911dd7e3224800bfbecf1e">copied from this link</a></p>
 <ul>
 <li>
 <p>Find dashboard: <strong>“Atharva LLMOps - Overview”</strong>.</p>

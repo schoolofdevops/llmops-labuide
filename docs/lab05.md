@@ -43,6 +43,14 @@ atharva-dental-assistant/
 
 ## 0) Setup Prometheus
 
+Add prometheus repo for helm 
+
+```
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+```
+
 Setup prometheus stack along with grafana with 
 
 ```
@@ -357,8 +365,9 @@ File: `k8s/40-serve/deploy-chat-api.yaml`
 Redeploy chat api as 
 
 ```
-kubectl delete -f k8s/40-serve/deploy-retriever.yaml
-kubectl apply -f k8s/40-serve/deploy-retriever.yaml
+kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
+kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+
 ```
 ---
 
@@ -681,8 +690,8 @@ File: `k8s/40-serve/deploy-retriever.yaml`
 
 Redeploy chat api as 
 ```
-kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
-kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+kubectl delete -f k8s/40-serve/deploy-retriever.yaml
+kubectl apply -f k8s/40-serve/deploy-retriever.yaml
 ```
 
 > No rebuild needed—these run from the mounted repo (`/mnt/project`).
@@ -813,141 +822,9 @@ spec:
         summary: "Chat API p95 latency > 3s"
 ```
 
----
 
-## 4) Grafana dashboard (ConfigMap)
+## 5) Add Labels to the Service Spec
 
-A concise starter dashboard with:
-
-* E2E latency p50/p95
-
-* Requests & errors
-
-* Tokens (prompt/comp/total)
-
-* Retriever latency p95
-
-* vLLM tokens/sec (if exported by your vLLM build)
-
-### `k8s/50-observability/cm-grafana-dashboard.yaml`
-
-```
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: atharva-llmops-dashboard2
-  namespace: monitoring
-  labels:
-    grafana_dashboard: "1"
-data:
-  atharva-llmops.json: |
-    {
-      "title": "Atharva LLMOps - Overview",
-      "timezone": "browser",
-      "schemaVersion": 39,
-      "version": 2,
-      "panels": [
-        { "type": "stat", "title": "Chat RPS",
-          "targets": [ { "expr": "sum(rate(chat_requests_total[1m]))" } ],
-          "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
-        },
-        { "type": "graph", "title": "Chat Errors by Stage (/s)",
-          "targets": [ { "expr": "sum by (stage) (rate(chat_errors_total[1m]))" } ],
-          "legend": { "show": true },
-          "gridPos": { "x": 6, "y": 0, "w": 18, "h": 6 }
-        },
-
-        { "type": "graph", "title": "Chat E2E Latency (p50/p95)",
-          "targets": [
-            { "expr": "histogram_quantile(0.50, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))", "legendFormat": "p50" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(chat_end_to_end_latency_seconds_bucket[5m])))", "legendFormat": "p95" }
-          ],
-          "gridPos": { "x": 0, "y": 4, "w": 12, "h": 7 }
-        },
-        { "type": "graph", "title": "Chat Sub-steps p95 (Retriever & vLLM)",
-          "targets": [
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(rag_retrieval_latency_seconds_bucket[5m])))", "legendFormat": "retriever (inside chat)" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm_request_latency_seconds_bucket[5m])))", "legendFormat": "vLLM (inside chat)" }
-          ],
-          "legend": { "show": true },
-          "gridPos": { "x": 12, "y": 4, "w": 12, "h": 7 }
-        },
-
-        { "type": "stat", "title": "Retriever RPS",
-          "targets": [ { "expr": "sum(rate(retriever_requests_total[1m]))" } ],
-          "gridPos": { "x": 0, "y": 11, "w": 6, "h": 4 }
-        },
-        { "type": "graph", "title": "Retriever Errors by Stage (/s)",
-          "targets": [ { "expr": "sum by (stage) (rate(retriever_errors_total[1m]))" } ],
-          "legend": { "show": true },
-          "gridPos": { "x": 6, "y": 11, "w": 18, "h": 6 }
-        },
-        { "type": "graph", "title": "Retriever Search Latency (p50/p95)",
-          "targets": [
-            { "expr": "histogram_quantile(0.50, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))", "legendFormat": "p50" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(retriever_search_latency_seconds_bucket[5m])))", "legendFormat": "p95" }
-          ],
-          "gridPos": { "x": 0, "y": 17, "w": 12, "h": 7 }
-        },
-        { "type": "graph", "title": "Retriever Sub-steps p95 (Dense/Sparse)",
-          "targets": [
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(retriever_dense_encode_latency_seconds_bucket[5m])))", "legendFormat": "dense encode" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(retriever_dense_faiss_latency_seconds_bucket[5m])))", "legendFormat": "dense faiss" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_vectorize_latency_seconds_bucket[5m])))", "legendFormat": "sparse vectorize" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(retriever_sparse_dot_latency_seconds_bucket[5m])))", "legendFormat": "sparse dot" }
-          ],
-          "legend": { "show": true },
-          "gridPos": { "x": 12, "y": 17, "w": 12, "h": 7 }
-        },
-
-        { "type": "stat", "title": "Prompt Tokens (last)",
-          "targets": [ { "expr": "chat_prompt_tokens" } ],
-          "gridPos": { "x": 0, "y": 24, "w": 6, "h": 4 }
-        },
-        { "type": "stat", "title": "Completion Tokens (last)",
-          "targets": [ { "expr": "chat_completion_tokens" } ],
-          "gridPos": { "x": 6, "y": 24, "w": 6, "h": 4 }
-        },
-        { "type": "stat", "title": "Total Tokens (last)",
-          "targets": [ { "expr": "chat_total_tokens" } ],
-          "gridPos": { "x": 12, "y": 24, "w": 6, "h": 4 }
-        },
-
-        { "type": "graph", "title": "vLLM Tokens/sec",
-          "targets": [
-            { "expr": "sum(rate(vllm:prompt_tokens_total[5m]))", "legendFormat": "prompt t/s" },
-            { "expr": "sum(rate(vllm:generation_tokens_total[5m]))", "legendFormat": "generation t/s" }
-          ],
-          "legend": { "show": true },
-          "gridPos": { "x": 18, "y": 24, "w": 6, "h": 6 }
-        },
-        { "type": "graph", "title": "vLLM Latencies (p95)",
-          "targets": [
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))", "legendFormat": "TTFT p95" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))", "legendFormat": "E2E p95" },
-            { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_inference_time_seconds_bucket[5m])))", "legendFormat": "inference p95" }
-          ],
-          "legend": { "show": true },
-          "gridPos": { "x": 0, "y": 28, "w": 12, "h": 7 }
-        },
-        { "type": "stat", "title": "vLLM Queue / Running",
-          "targets": [
-            { "expr": "sum(vllm:num_requests_waiting)", "legendFormat": "waiting" },
-            { "expr": "sum(vllm:num_requests_running)", "legendFormat": "running" }
-          ],
-          "gridPos": { "x": 12, "y": 28, "w": 6, "h": 4 }
-        },
-
-        { "type": "table", "title": "Retriever Index & Meta Sizes",
-          "targets": [
-            { "expr": "retriever_index_items", "legendFormat": "index_items" },
-            { "expr": "retriever_meta_items", "legendFormat": "meta_items" }
-          ],
-          "gridPos": { "x": 18, "y": 30, "w": 6, "h": 5 }
-        }
-      ]
-    }
-```
 
 Also update the existing service spec to add relevant labels which are then used by prometheus service monitor to scrape the metrics from 
 
@@ -1009,7 +886,6 @@ set -euo pipefail
 kubectl apply -f k8s/50-observability/sm-vllm.yaml
 kubectl apply -f k8s/50-observability/sm-chat-api.yaml
 kubectl apply -f k8s/50-observability/sm-retriever.yaml
-kubectl apply -f k8s/50-observability/cm-grafana-dashboard.yaml
 kubectl apply -f k8s/50-observability/pr-alerts.yaml || true
 
 echo "Waiting a bit for Prometheus to pick up targets..."
@@ -1042,6 +918,11 @@ bash scripts/deploy_observability.sh
 
 Open Grafana at [http://127.0.0.1:3000](http://127.0.0.1:3000/)
 (Default admin/admin unless you changed it via Helm values.)
+
+
+From Dashboards -> New -> Import 
+
+Paste the Json Dashboard [copied from this link](https://gist.github.com/initcron/02f3842ce6911dd7e3224800bfbecf1e)
 
 * Find dashboard: **“Atharva LLMOps - Overview”**.
 

@@ -197,7 +197,7 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 
 
 # scale down optional components
-kubectl -n argocd scale deploy argocd-dex-server argocd-notifications-controller argocd-redis argocd-applicationset-controller --replicas=0
+# kubectl -n argocd scale deploy argocd-dex-server argocd-notifications-controller argocd-redis argocd-applicationset-controller --replicas=0
 
 # Wait & get admin password
 kubectl -n argocd rollout status deploy/argocd-server --timeout=300s || true
@@ -545,4 +545,3 @@ This is what we accomplished in this lab
 * Learned how to **rollback** using Git/Argo history.
 
 
-#courses/llmops/labs/v1

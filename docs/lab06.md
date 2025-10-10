@@ -425,8 +425,9 @@ spec:
 Run it:
 
 ```
-kubectl apply -f k8s/60-autoscale/loadgen-job.yaml
-kubectl -n atharva-app logs -f job/chat-loadgen
+kubectl create -f k8s/60-autoscale/loadgen-job.yaml
+kubectl get pods -n atharva-app
+kubectl -n atharva-app logs -f xxxx
 ```
 
 Watch scaling:

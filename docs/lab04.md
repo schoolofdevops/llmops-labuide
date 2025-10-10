@@ -636,45 +636,7 @@ bash scripts/smoke_e2e.sh
 curl -s http://127.0.0.1:30200/v1/models | jq .
 ```
 
-### 2) Simple chat completion
-
-```
-curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "model":"smollm2-135m-atharva",
-        "messages":[{"role":"user","content":"Say hello in 5 words."}],
-        "max_tokens": 32,
-        "temperature": 0.2
-      }' | jq .
-```
-
-
-```
-curl -s -X POST http://127.0.0.1:30300/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "model":"smollm2-135m-atharva",
-        "messages":[{"role":"user","content":"Say hello in 5 words."}],
-        "max_tokens": 32,
-        "temperature": 0.2
-      }' | jq .
-```
-
-### 3) Legacy completions (optional)
-
-```
-curl -s -X POST http://127.0.0.1:30300/v1/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "model":"smollm2-135m-atharva",
-        "prompt":"Write a haiku about dentists:",
-        "max_tokens": 40
-      }' | jq .
-```
-
-
-### 4) chat API
+### 2) chat API Test
 
 ```
 curl -s -X POST http://127.0.0.1:30300/chat -H "content-type: application/json" \
@@ -685,7 +647,7 @@ curl -s -X POST http://127.0.0.1:30300/chat -H "content-type: application/json" 
 
 ```
 
-### 5) To see whats being sent to the LLM 
+### 3) To see whats being sent to the LLM 
 
 ```
 curl -s -X POST http://127.0.0.1:30300/chat \\n  -H 'content-type: application/json' \\n  -d '{"question":"How long does scaling take and what aftercare is needed?","k":4,"debug":true}' \\n  | jq -r '.debug.messages[0].content'
@@ -710,4 +672,3 @@ This is what we accomplished in this lab
 
 
 
-#courses/llmops/labs/v1
