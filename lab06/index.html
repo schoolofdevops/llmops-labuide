@@ -460,8 +460,9 @@ spec:
           - &quot;http://atharva-chat-api.atharva-app.svc.cluster.local:8080/chat&quot;
 </code></pre>
 <p>Run it:</p>
-<pre><code>kubectl apply -f k8s/60-autoscale/loadgen-job.yaml
-kubectl -n atharva-app logs -f job/chat-loadgen
+<pre><code>kubectl create -f k8s/60-autoscale/loadgen-job.yaml
+kubectl get pods -n atharva-app
+kubectl -n atharva-app logs -f xxxx
 </code></pre>
 <p>Watch scaling:</p>
 <pre><code># If using HPA CPU:
