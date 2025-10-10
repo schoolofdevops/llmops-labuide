@@ -491,8 +491,9 @@ def chat(req: ChatRequest):
             uvicorn chat_api:app --host 0.0.0.0 --port 8080 --proxy-headers
 </code></pre>
 <p>Redeploy chat api as </p>
-<pre><code>kubectl delete -f k8s/40-serve/deploy-retriever.yaml
-kubectl apply -f k8s/40-serve/deploy-retriever.yaml
+<pre><code>kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
+kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+
 </code></pre>
 <hr />
 <h3 id="b-retriever-add-prometheus-metrics-ragretrieverpy">B) Retriever — add Prometheus metrics (<code>rag/retriever.py</code>)</h3>
@@ -806,8 +807,8 @@ def search(req: SearchRequest):
                 fastapi==0.112.2 uvicorn==0.30.6 prometheus-client&gt;=0.20.0
 </code></pre>
 <p>Redeploy chat api as </p>
-<pre><code>kubectl delete -f k8s/40-serve/deploy-chat-api.yaml
-kubectl apply -f k8s/40-serve/deploy-chat-api.yaml
+<pre><code>kubectl delete -f k8s/40-serve/deploy-retriever.yaml
+kubectl apply -f k8s/40-serve/deploy-retriever.yaml
 </code></pre>
 <blockquote>
 <p>No rebuild needed—these run from the mounted repo (<code>/mnt/project</code>).</p>
