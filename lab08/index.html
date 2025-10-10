@@ -492,7 +492,6 @@ bash scripts/install_argo_workflows.sh
 
 # Create RBAC + PV/PVC + Template
 kubectl apply -f k8s/80-workflows/rbac-argo-wf.yaml
-kubectl apply -f k8s/80-workflows/pv-pvc-project.yaml
 kubectl apply -f k8s/80-workflows/workflowtemplate-atharva-train.yaml
 
 # Start a run
