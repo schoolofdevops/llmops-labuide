@@ -189,6 +189,11 @@
 </code></pre>
 <hr />
 <h2 id="0-setup-prometheus">0) Setup Prometheus</h2>
+<p>Add prometheus repo for helm </p>
+<pre><code>helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+</code></pre>
 <p>Setup prometheus stack along with grafana with </p>
 <pre><code>helm upgrade --install kps -n monitoring \
   prometheus-community/kube-prometheus-stack \
