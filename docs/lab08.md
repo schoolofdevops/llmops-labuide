@@ -26,6 +26,11 @@ atharva-dental-assistant/
 
 ---
 
+## 0) Do this before you start 
+
+Replace these two files : [Find the doc here](https://gist.github.com/initcron/52b50c386455ccaaa7bbae41b629eb01)
+
+
 ## 1) Install Argo Workflows (helm, minimal)
 
 ### `scripts/install_argo_workflows.sh`
@@ -380,7 +385,6 @@ bash scripts/install_argo_workflows.sh
 
 # Create RBAC + PV/PVC + Template
 kubectl apply -f k8s/80-workflows/rbac-argo-wf.yaml
-kubectl apply -f k8s/80-workflows/pv-pvc-project.yaml
 kubectl apply -f k8s/80-workflows/workflowtemplate-atharva-train.yaml
 
 # Start a run
