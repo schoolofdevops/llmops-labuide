@@ -97,6 +97,8 @@
     </li>
         </ul>
     </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-add-labels-to-the-service-spec">5) Add Labels to the Service Spec</a>
+    </li>
     <li class="toctree-l2"><a class="reference internal" href="#5-deploy-all-observability-bits">5) Deploy all observability bits</a>
         <ul>
     <li class="toctree-l3"><a class="reference internal" href="#scriptsdeploy_observabilitysh">scripts/deploy_observability.sh</a>
@@ -916,7 +918,7 @@ spec:
       annotations:
         summary: &quot;Chat API p95 latency &gt; 3s&quot;
 </code></pre>
-<hr />
+<h2 id="5-add-labels-to-the-service-spec">5) Add Labels to the Service Spec</h2>
 <p>Also update the existing service spec to add relevant labels which are then used by prometheus service monitor to scrape the metrics from </p>
 <p>File : <code>k8s/40-serve/svc-retriever.yaml</code></p>
 <pre><code>apiVersion: v1
